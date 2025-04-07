@@ -1,4 +1,21 @@
-# Plan
+# Deep Peak Sieve
+
+Deep Peak Sieve is a peak detector for 1D signals on steroids.
+
+## Overview
+
+The goal of this project is to provide a peak detection algorithm that is robust to noise and can be used in a variety of applications. The goal of this project is to achieve the accuracy of supervised deep learning while purposely working against missing interesting events due to biased training data.
+
+The pipeline consists of several steps:
+
+1. **Preprocessing**: The raw data is preprocessed to remove noise and artifacts by filtering and smoothing.
+2. **Feature Extraction**: Peaks are detected on a per-channel basis using a low amplitude threshold and temporal constraints.
+3. **Embedding**: The detected peaks are embedded in a latent space using a Variational Autoencoder (VAE).
+4. **Labeling**: The latent space is regularly sampled and a mini GUI is provided to label the detected peaks as either noise or valid peaks. Options include regular sampling, random sampling or sampling based on the structure of the latent space (such as biasing towards high density or low density regions).
+5. **Classification**: A simple classifier is trained on the labeled data to classify the detected peaks as either noise or valid peaks.
+6. **Active learning**: The classifier is used to classify all detected peaks and the results are used to improve the model by retraining it on the newly classified data. This can be done in an iterative fashion to improve the model over time. Alternatively, a human can review and label previously unlabeled and hard to classify data points to improve the model.
+
+# Other Notes
 
 GITHUB Orga: OpenEfish
 
@@ -35,4 +52,4 @@ GITHUB Orga: OpenEfish
 -> WOW!
 
 # TODO
-- [ ] Fix the logger configurator (does not work with pkgs that have a src/ folder for some reason)
+- [x] Fix the logger configurator (does not work with pkgs that have a src/ folder for some reason)
