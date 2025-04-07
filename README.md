@@ -33,3 +33,6 @@ GITHUB Orga: OpenEfish
 - Use labels to train a simple classifier on the HTTapprox or even the raw pulse on each channel.
 - Classify all detected pulses and continue working with them in other analysis steps.
 -> WOW!
+
+# TODO
+- [ ] Fix the logger configurator (does not work with pkgs that have a src/ folder for some reason)

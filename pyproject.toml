@@ -1,24 +1,23 @@
 [project]
-name = "pulses"
+name = "deep_peak_sieve"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "audian",
     "audioio",
     "ipython>=9.0.2",
-    "thunderfish",
-    "thunderlab",
 ]
 
 [tool.uv.sources]
 audioio = { git = "https://github.com/bendalab/audioio" }
-thunderlab = { git = "https://github.com/bendalab/thunderlab" }
-thunderfish = { git = "https://github.com/bendalab/thunderfish" }
 audian = { git = "https://github.com/bendalab/audian" }
 
 [dependency-groups]
 dev = [
     "ruff>=0.11.2",
 ]
+
+[project.scripts]
+collect_peaks = "deep_peak_sieve.prepro.collect_peaks:main"
