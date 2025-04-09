@@ -17,6 +17,15 @@ The pipeline consists of several steps:
 
 ## Quickstart 🚀
 
+This project is not nicely packaged yet, so you have to install it manually: 
+
+```bash
+git clone https://github.com/weygoldt/deep_peak_sieve
+cd deep_peak_sieve
+pip install -r requirements.txt # install the dependencies
+pip install -e . # install the package in editable mode
+```
+
 A general workflow includes the following steps:
 
 1. Detecting peaks in a signal. This is kept very simple here: 
