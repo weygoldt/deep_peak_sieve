@@ -20,4 +20,4 @@ dev = [
 ]
 
 [project.scripts]
-collect_peaks = "deep_peak_sieve.prepro.collect_peaks:main"
+collect_peaks = "deep_peak_sieve.prepro.collect_peaks:app"

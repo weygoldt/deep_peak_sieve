@@ -570,3 +570,7 @@ pyrightconfig.json
 *.tar
 *.gz
 *.7z
+
+# Numpy files
+*.npy
+*.npz

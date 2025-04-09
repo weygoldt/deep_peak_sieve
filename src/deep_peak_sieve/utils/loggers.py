@@ -21,7 +21,7 @@ def discover_package_modules():
         __file__
     ).parent.parent.parent.parent.name  # get the package name
     package = importlib.import_module(package_name)
-    print(f"Package name: {package_name}")
+    # print(f"Package name: {package_name}")
     package_path = Path(package.__file__).parent
     modules = []
 
@@ -39,10 +39,14 @@ def configure_logging(
     """Configures logging globally, ensuring third-party libraries remain quiet."""
     level = logging.WARNING  # Default level
 
-    if verbosity == 1:
+    if verbosity == 0:
+        level = logging.WARNING
+    elif verbosity == 1:
         level = logging.INFO
     elif verbosity >= 2:
         level = logging.DEBUG
+    else:
+        print("Invalid verbosity level. Defaulting to WARNING.")
 
     handlers = [RichHandler()]
 

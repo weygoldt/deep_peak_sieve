@@ -1,8 +1,8 @@
 # Deep Peak Sieve
 
-Deep Peak Sieve is a peak detector for 1D signals on steroids.
+Deep Peak Sieve is a peak detector for 1D signals (on steroids 💊).
 
-## Overview
+## Overview 🔎
 
 The goal of this project is to provide a peak detection algorithm that is robust to noise and can be used in a variety of applications. The goal of this project is to achieve the accuracy of supervised deep learning while purposely working against missing interesting events due to biased training data.
 
@@ -14,6 +14,34 @@ The pipeline consists of several steps:
 4. **Labeling**: The latent space is regularly sampled and a mini GUI is provided to label the detected peaks as either noise or valid peaks. Options include regular sampling, random sampling or sampling based on the structure of the latent space (such as biasing towards high density or low density regions).
 5. **Classification**: A simple classifier is trained on the labeled data to classify the detected peaks as either noise or valid peaks.
 6. **Active learning**: The classifier is used to classify all detected peaks and the results are used to improve the model by retraining it on the newly classified data. This can be done in an iterative fashion to improve the model over time. Alternatively, a human can review and label previously unlabeled and hard to classify data points to improve the model.
+
+## Quickstart 🚀
+
+A general workflow includes the following steps:
+
+1. Detecting peaks in a signal. This is kept very simple here: 
+   - Use a low amplitude threshold to detect peaks.
+   - Do not distinguish between positive and negative "peaks".
+   - Use temporal constraints to filter out false positives (two peaks need to be at least x ms apart).
+   - An archetype of each peak (mean across all channels), start and stop index in the dataset, and path to the dataset are saved to a `.npz` file. Each file contains 10000 peaks at max.
+
+To start peak detection, run:
+
+```bash
+collect_peaks --help # show help
+collect_peaks /path/to/dataset -vvv
+```
+
+2. Embedding the detected peaks in a latent space using a VAE. To be implemented.
+3. Sampling from the latent space and labeling the detected peaks. To be implemented.
+4. Training a classifier on the labeled data. To be implemented.
+5. Inference
+
+## TODO ✅
+
+- [ ] Generalize to mono- and polyphasic peaks. Currently, only monophonic peaks work well because the sign of them can be easily flipped using the maximum. For polyphasic peaks, we need to consider the order of negative and positive excursions. To be implemented in `deep_peak_sieve/prepro/collect_peaks.py`.
+
+- [x] Fix the logger configurator (does not work with pkgs that have a src/ folder for some reason)
 
 # Other Notes
 
@@ -39,7 +67,6 @@ GITHUB Orga: OpenEfish
 - Clustering
    - HDBSCAN or other neural clustering
 
-
 ## Overpowered Pulsedetector
 
 - Detect pulses with low absolute threshold peak detection
@@ -50,6 +77,3 @@ GITHUB Orga: OpenEfish
 - Use labels to train a simple classifier on the HTTapprox or even the raw pulse on each channel.
 - Classify all detected pulses and continue working with them in other analysis steps.
 -> WOW!
-
-# TODO
-- [x] Fix the logger configurator (does not work with pkgs that have a src/ folder for some reason)
