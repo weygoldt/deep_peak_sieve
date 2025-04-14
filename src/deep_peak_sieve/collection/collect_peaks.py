@@ -12,7 +12,7 @@ from scipy.signal import find_peaks, savgol_filter
 
 from deep_peak_sieve.utils.loggers import get_logger, get_progress, configure_logging
 from deep_peak_sieve.collection.filters import bandpass_filter
-from deep_peak_sieve.utils.datasets import load_data
+from deep_peak_sieve.utils.datasets import load_raw_data, save_numpy
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
 log = get_logger(__name__)
@@ -25,24 +25,21 @@ def pretty_duration_humanize(seconds: float) -> str:
     return humanize.naturaldelta(timedelta(seconds=seconds))
 
 
-def initialize_dataset(
-    path: Path, dataset_size: int, around_peak_window: int, channels: int
-):
+def initialize_dataset(path: Path):
     """
     Prepare an empty structure into which extracted peaks and metadata will be placed.
     """
     log.debug("Creating empty dataset to save extracted peaks")
     dataset = {
-        "dataset": path,
-        "peaks": np.zeros((dataset_size, around_peak_window * 2)),
-        "channels": np.zeros((dataset_size, channels)),
-        "centers": np.zeros(dataset_size),
-        "start_stop_index": np.zeros((dataset_size, 2)),
+        "peaks": [],
+        "channels": [],
+        "centers": [],
+        "start_stop_index": [],
     }
     return dataset
 
 
-def apply_filter(block: np.ndarray, sample_rate: int, params: dict) -> np.ndarray:
+def apply_filter(block: np.ndarray, sample_rate: float, params: dict) -> np.ndarray:
     """
     Apply the specified filtering method to the audio block data.
     """
@@ -204,23 +201,10 @@ def compute_mean_peak(
     return mean_peak
 
 
-def save_dataset(
-    dataset: dict,
-    collected_peak_counter: int,
-    path: Path,
-    savepath: Path,
-    dataset_counter: int,
+def process_file(
+    data: AudioLoader, save_path: Path, path: Path, buffersize_seconds: int = 60
 ):
-    """
-    Save the current dataset to disk, under a numbered filename (for chunked writing).
-    """
-    filename = f"{path.stem}_peaks_{dataset_counter}.npz"
-    log.info(f"Collected {collected_peak_counter} peaks, saving to {filename}.")
-    np.savez(savepath / filename, **dataset)
-
-
-def process_file(data: AudioLoader, path: Path, buffersize_seconds: int = 60):
-    data = data.set_unwrap(thresh=1.5)
+    data.set_unwrap(thresh=1.5)
     blocksize = int(np.ceil(data.rate * buffersize_seconds))
     overlap = blocksize // 10  # Just a bit clearer than int(np.ceil(blocksize // 10))
 
@@ -247,15 +231,13 @@ def process_file(data: AudioLoader, path: Path, buffersize_seconds: int = 60):
         """
     )
 
-    dataset = initialize_dataset(
-        path, max_peaks_per_file, around_peak_window, data.channels
-    )
+    dataset = initialize_dataset(path)
     collected_peak_counter = 0
     dataset_counter = 0
 
     num_blocks = int(np.ceil(data.shape[0] / (blocksize - overlap)))
     with get_progress() as pbar:
-        desc = "Processing dataset"
+        desc = "Processing file"
         task = pbar.add_task(desc, total=num_blocks - 1, transient=True)
         for blockiterval, block in enumerate(
             data.blocks(block_size=blocksize, noverlap=overlap)
@@ -311,39 +293,24 @@ def process_file(data: AudioLoader, path: Path, buffersize_seconds: int = 60):
                 bool_channels[chans] = True
 
                 # If we have space in the dataset, append
-                if collected_peak_counter <= max_peaks_per_file:
-                    dataset["peaks"][collected_peak_counter] = mean_peak
-                    dataset["channels"][collected_peak_counter] = bool_channels
-                    dataset["centers"][collected_peak_counter] = center
-                    dataset["start_stop_index"][collected_peak_counter] = [
-                        center - around_peak_window,
-                        center + around_peak_window,
-                    ]
-                    collected_peak_counter += 1
-
-                # Check if we need to save
-                last_block_and_last_peak = (blockiterval == num_blocks - 1) and (
-                    peakiterval == len(grouped_peaks) - 1
-                )
-                reached_maximum_capacity = collected_peak_counter == max_peaks_per_file
-
-                if reached_maximum_capacity or last_block_and_last_peak:
-                    save_dataset(
-                        dataset, collected_peak_counter, path, savepath, dataset_counter
-                    )
-
-                    # Reset for next batch
-                    dataset_counter += 1
-                    collected_peak_counter = 0
-                    if not last_block_and_last_peak:
-                        log.debug(
-                            f"Resetting dataset to collect next {max_peaks_per_file} peaks"
-                        )
-                        dataset = initialize_dataset(
-                            path, max_peaks_per_file, around_peak_window, data.channels
-                        )
+                start_stop_index = [
+                    center - around_peak_window,
+                    center + around_peak_window,
+                ]
+                dataset["peaks"].append(mean_peak)
+                dataset["channels"].append(bool_channels)
+                dataset["centers"].append(center)
+                dataset["start_stop_index"].append(start_stop_index)
+                collected_peak_counter += 1
 
             pbar.update(task, advance=1)
+
+        dataset["peaks"] = np.array(dataset["peaks"])
+        dataset["channels"] = np.array(dataset["channels"])
+        dataset["centers"] = np.array(dataset["centers"])
+        dataset["start_stop_index"] = np.array(dataset["start_stop_index"])
+
+        save_numpy(dataset, save_path)
 
 
 def collect_peaks(
@@ -358,9 +325,9 @@ def collect_peaks(
     5) Waveform extraction
     6) Dataset saving
     """
-    file_list = load_data(path=path, filetype=filetype)
-    for data in file_list:
-        process_file(data, path, buffersize_seconds)
+    file_list, save_list = load_raw_data(path=path, filetype=filetype)
+    for data, save_path in zip(file_list, save_list):
+        process_file(data, save_path, path, buffersize_seconds)
 
 
 @app.command()
@@ -368,8 +335,8 @@ def main(
     datapath: Path,
     verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
 ):
+    savepath = (
+        None  # Maybe for later when we want to save the extracted peaks somewhere else
+    )
     configure_logging(verbosity=verbose)
-    savepath = datapath.parent / f"{datapath.stem}_peaks"
-    if not savepath.exists():
-        savepath.mkdir(parents=True, exist_ok=True)
     collect_peaks(path=datapath, savepath=savepath, buffersize_seconds=60)

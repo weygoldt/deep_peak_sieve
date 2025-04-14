@@ -1,10 +1,21 @@
 import numpy as np
 from pathlib import Path
 from audioio.audioloader import AudioLoader
+from IPython import embed
+from dataclasses import dataclass
 
 from deep_peak_sieve.utils.loggers import get_logger
 
 log = get_logger(__name__)
+
+
+@dataclass
+class Dict2DataClass:
+    """Converts a dictionary to a dataclass."""
+
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
 
 def get_file_list(path: Path, filetype="wav") -> tuple:
@@ -13,45 +24,80 @@ def get_file_list(path: Path, filetype="wav") -> tuple:
     """
 
     file_list = []
+    save_list = []
 
     if not path.exists():
         raise FileNotFoundError(f"Path {path} does not exist.")
-    elif path.is_dir() and len(list(path.glob("*.wav"))) > 0:
-        file_list = sorted(list(path.glob("*.wav")))
-        return file_list, "dir"
-    elif path.is_dir() and len(list(path.glob("*.wav"))) == 0:
+
+    elif path.is_dir() and len(list(path.glob(f"*.{filetype}"))) > 0:
+        file_list = sorted(list(path.glob(f"*.{filetype}")))
+        save_dir = path.stem + "_peaks"
+        save_path = path.parent / save_dir
+        save_path.mkdir(exist_ok=True)
+        save_file_names = [file.stem + "_peaks" for file in file_list]
+        save_list = [save_path / name for name in save_file_names]
+        return file_list, save_list, "dir"
+
+    elif path.is_dir() and len(list(path.glob(f"*.{filetype}"))) == 0:
         subdirs = list(path.glob("*/"))
+        save_dir = path.stem + "_peaks"
+        save_path = path.parent / save_dir
+        save_path.mkdir(exist_ok=True)
         if len(subdirs) > 0:
             for subdir in subdirs:
-                sub_file_list = sorted(list(subdir.glob("*.wav")))
+                sub_file_list = sorted(list(subdir.glob(f"*.{filetype}")))
                 if len(sub_file_list) > 0:
-                    file_list.extend(sub_file_list)
-        return file_list, "subdir"
-    elif path.is_file() and path.suffix == ".wav":
+                    sub_save_dir = save_path / subdir.stem
+                    sub_save_dir.mkdir(exist_ok=True)
+                    file_list.append(sub_file_list)
+                    save_file_names = [file.stem + "_peaks" for file in sub_file_list]
+                    save_list.append([sub_save_dir / name for name in save_file_names])
+        else:
+            msg = f"Path {path} is a directory but contains no .wav files."
+            raise ValueError(msg)
+        return file_list, save_list, "subdir"
+
+    elif path.is_file() and path.suffix == f".{filetype}":
         log.info("Dataset is a single file.")
         file_list = [path]
-        return file_list, "file"
+        save_name = path.stem + "_peaks.npy"
+        save_list = [path.parent / save_name]
+        return file_list, save_list, "file"
     else:
         msg = f"Path {path} is not a valid file or directory. Please provide a valid path."
         raise ValueError(msg)
 
 
-def load_data(path: Path, filetype="wav") -> list:
+def load_raw_data(path: Path, filetype="wav") -> tuple:
     """
     Load audio data from either a single file or all matching files in a directory.
     """
 
-    file_list, dtype = get_file_list(path, filetype)
+    file_list, save_list, dtype = get_file_list(path, filetype)
     if dtype == "file":
-        return [AudioLoader(str(path))]
+        return [AudioLoader(str(path))], save_list
     elif dtype == "dir":
-        return [AudioLoader(file_list)]
+        data = [AudioLoader(str(file)) for file in file_list]
+        return data, save_list
     elif dtype == "subdir":
         data = []
-        for subdir in file_list:
-            sub_data = AudioLoader(str(subdir))
-            data.append(sub_data)
-        return data
+        savelist = []
+        for subdir, savepaths in zip(file_list, save_list):
+            for file, savefile in zip(subdir, savepaths):
+                sub_data = AudioLoader(str(file))
+                data.append(sub_data)
+                savelist.append(savefile)
+        return data, savelist
     else:
         msg = f"Path {path} is not a valid file or directory. Please provide a valid path."
         raise ValueError(msg)
+
+
+def save_numpy(
+    dataset: dict,
+    savepath: Path,
+):
+    """
+    Save the current dataset to disk, under a numbered filename (for chunked writing).
+    """
+    np.savez(savepath, **dataset)

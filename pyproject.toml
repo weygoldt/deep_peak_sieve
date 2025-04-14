@@ -20,4 +20,5 @@ dev = [
 ]
 
 [project.scripts]
-collect_peaks = "deep_peak_sieve.prepro.collect_peaks:app"
+collect_peaks = "deep_peak_sieve.collection.collect_peaks:app"
+sample_peaks = "deep_peak_sieve.sampling.sample_peaks:app"
