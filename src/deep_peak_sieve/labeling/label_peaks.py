@@ -28,8 +28,6 @@ def plot_peaks(
     labels,
 ):
     def on_press(event, index):
-        # Disable all keys except "n" and "t"
-
         if event.key == "n":
             log.info(f"Pulse {index} labeled as True")
             labels.append(True)
@@ -96,6 +94,7 @@ def main(
         data = Dict2Dataclass(data)
 
         # TODO: Handle different locations of raw data for each dtype (dataset type)
+        # TODO: Save the labels, implement fixing them if failed
 
         for sample_indices, data_path in zip(data.sample_indices, data.files):
             data_path = Path(data_path)
@@ -106,11 +105,6 @@ def main(
             )
             raw_file = AudioLoader(str(original_path))
             peak_file = Dict2Dataclass(np.load(data_path))
-
-            print(len(peak_file.peaks))
-            print(np.max(sample_indices))
-            # TODO: For some reason the sample indices cause index overflow
-            exit()
 
             for sample in sample_indices:
                 peak_archetype = peak_file.peaks[sample]
