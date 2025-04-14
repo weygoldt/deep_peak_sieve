@@ -1,20 +1,20 @@
 import numpy as np
 from pathlib import Path
 from audioio.audioloader import AudioLoader
-from IPython import embed
 from dataclasses import dataclass
 
 from deep_peak_sieve.utils.loggers import get_logger
+
 
 log = get_logger(__name__)
 
 
 @dataclass
-class Dict2DataClass:
+class Dict2Dataclass:
     """Converts a dictionary to a dataclass."""
 
-    def __init__(self, **kwargs):
-        for key, value in kwargs.items():
+    def __init__(self, data: dict):
+        for key, value in data.items():
             setattr(self, key, value)
 
 

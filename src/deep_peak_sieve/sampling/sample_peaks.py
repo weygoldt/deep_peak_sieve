@@ -1,14 +1,12 @@
 from typing import Annotated
 from abc import abstractmethod
 import numpy as np
-import matplotlib.pyplot as plt
 import typer
 from pathlib import Path
-from IPython import embed
-from dataclasses import dataclass
+import orjson
 
-from deep_peak_sieve.utils.loggers import get_logger, get_progress, configure_logging
-from deep_peak_sieve.utils.datasets import get_file_list, save_numpy, Dict2DataClass
+from deep_peak_sieve.utils.loggers import get_logger, configure_logging
+from deep_peak_sieve.utils.datasets import get_file_list, save_numpy
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
 log = get_logger(__name__)
@@ -91,31 +89,18 @@ def main(
     else:
         raise ValueError(f"Unknown dataset type: {dtype}")
 
-    sampled_data = {}
-    end = None
-    n_collected_samples = 0
-    for i, file in enumerate(data):
-        log.info(f"Loading {file}")
-        data = np.load(file)
+    data = [str(file) for file in data]
+    json_data = {
+        "dtype": dtype,
+        "num_samples": num_samples,
+        "sample_indices": sample_indices,
+        "files": data,
+    }
 
-        if i == 0:
-            start = 0
-            end = sample_indices[i].shape[0]
-        else:
-            start = end
-            end = start + sample_indices[i].shape[0]
+    # Save the sample indices to a JSON file
+    with open(savepath.with_suffix(".json"), "w") as f:
+        f.write(
+            orjson.dumps(json_data, option=orjson.OPT_SERIALIZE_NUMPY).decode("utf-8")
+        )
 
-        for j, (key, val) in enumerate(data.items()):
-            # Create empty array for the sampled data
-            if i == 0:
-                target_shape = (num_samples, *val.shape[1:])
-                sampled_data[key] = np.zeros(target_shape)
-
-            sampled_data[key][start:end] = val[sample_indices[i]]
-        n_collected_samples += sample_indices[i].shape[0]
-
-    log.info(
-        f"Collected {n_collected_samples} samples from {len(data)} files. Saving to {savepath}.npz"
-    )
-
-    save_numpy(dataset=sampled_data, savepath=savepath)
+    log.info(f"Saved sample indices to {savepath.with_suffix('.json')}")

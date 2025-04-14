@@ -22,3 +22,5 @@ dev = [
 [project.scripts]
 collect_peaks = "deep_peak_sieve.collection.collect_peaks:app"
 sample_peaks = "deep_peak_sieve.sampling.sample_peaks:app"
+label_peaks = "deep_peak_sieve.labeling.label_peaks:app"
+explore = "deep_peak_sieve.exploration:app"

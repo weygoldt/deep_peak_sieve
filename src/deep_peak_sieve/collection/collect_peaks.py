@@ -210,7 +210,7 @@ def process_file(
 
     # Configuration
     peak_height_threshold = 0.001
-    min_peak_distance_seconds = 0.005
+    min_peak_distance_seconds = 0.004  # 2ms
     min_peak_distance = int(np.ceil(min_peak_distance_seconds * data.rate))
     around_peak_window = int(np.round(0.75 * min_peak_distance))
     min_channels_with_peaks = 4
@@ -292,7 +292,7 @@ def process_file(
                 bool_channels = np.zeros(data.channels, dtype=bool)
                 bool_channels[chans] = True
 
-                # If we have space in the dataset, append
+                center += blockiterval * (blocksize - overlap)
                 start_stop_index = [
                     center - around_peak_window,
                     center + around_peak_window,
