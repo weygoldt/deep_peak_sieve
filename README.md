@@ -37,7 +37,7 @@ A general workflow includes the following steps:
    - Use a low amplitude threshold to detect peaks.
    - Do not distinguish between positive and negative "peaks".
    - Use temporal constraints to filter out false positives (two peaks need to be at least x ms apart).
-   - An archetype of each peak (mean across all channels), start and stop index in the dataset, and path to the dataset are saved to a `.npz` file. Each file contains 10000 peaks at max.
+   - An archetype of each peak (mean across all channels), start and stop index in the dataset, and path to the dataset are saved to a `.npz` file. For each file in the dataset, one `.npz` file is created.
 
 To start peak detection, run:
 

@@ -161,6 +161,7 @@ def main(
 
                 log.debug(f"Key pressed: {key}")
 
+                label = -1
                 if key == "c":
                     index = index - 1
                     if index >= 0:
@@ -172,9 +173,9 @@ def main(
                             peak_file=peak_file,
                         )
                         if key == "t":
-                            labels[index] = True
+                            label = 1
                         elif key == "f":
-                            labels[index] = False
+                            label = 0
                         else:
                             raise ValueError(
                                 f"Invalid key pressed for correction: {key}"
@@ -184,13 +185,16 @@ def main(
                         log.info("No previous sample to correct.")
                         continue
                 elif key == "t":
-                    labels[index] = True
+                    label = 1
                 elif key == "f":
-                    labels[index] = False
+                    label = 0
                 else:
                     raise ValueError(
                         f"Invalid key pressed: {key}. Expected 't', 'f', or 'c'."
                     )
+
+                # Save the label
+                labels[sample_indices[index]] = label
 
                 index += 1
                 if index >= len(sample_indices):
