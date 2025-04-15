@@ -17,6 +17,10 @@ class Dict2Dataclass:
         for key, value in data.items():
             setattr(self, key, value)
 
+    def to_dict(self):
+        """Convert the dataclass back to a dictionary."""
+        return {key: value for key, value in self.__dict__.items()}
+
 
 def get_file_list(path: Path, filetype="wav") -> tuple:
     """

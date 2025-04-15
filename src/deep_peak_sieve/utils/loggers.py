@@ -45,6 +45,7 @@ def configure_logging(
         level = logging.INFO
     elif verbosity >= 2:
         level = logging.DEBUG
+        print("Debugging enabled.")
     else:
         print("Invalid verbosity level. Defaulting to WARNING.")
 
