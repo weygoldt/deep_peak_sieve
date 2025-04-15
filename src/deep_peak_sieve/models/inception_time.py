@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.utils.class_weight import compute_class_weight
 import warnings
 from collections import OrderedDict
+from IPython import embed
 
 warnings.filterwarnings("ignore", category=UserWarning, module="torch.nn")
 
@@ -285,5 +286,8 @@ class InceptionTime:
 
         # Get the predicted labels.
         y = p.argmax(-1).detach().cpu().numpy().flatten()
+        y_prob = p.detach().cpu().numpy()[y]
+        embed()
+        exit()
 
         return y
