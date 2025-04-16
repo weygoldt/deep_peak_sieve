@@ -1,7 +1,6 @@
 import logging
 import pkgutil
 import importlib
-import sys
 from pathlib import Path
 from rich.logging import RichHandler
 from rich.progress import (

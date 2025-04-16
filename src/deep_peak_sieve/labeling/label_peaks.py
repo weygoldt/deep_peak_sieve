@@ -1,17 +1,13 @@
-from typing import Annotated, Optional
+from typing import Annotated
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.ndimage import labeled_comprehension
-import seaborn as sns
 import orjson
 from pathlib import Path
 import typer
-from IPython import embed
 from audioio.audioloader import AudioLoader
 
 from deep_peak_sieve.utils.loggers import get_logger, configure_logging
-from deep_peak_sieve.utils.datasets import Dict2Dataclass
 
 app = typer.Typer()
 log = get_logger(__name__)

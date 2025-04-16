@@ -8,7 +8,6 @@ from lightning.pytorch.callbacks import LearningRateMonitor, lr_monitor
 
 from deep_peak_sieve.models.utils import (
     generate_synthetic_peaks,
-    plot_signals,
     visualize_latent_space,
     plot_reconstructions,
 )

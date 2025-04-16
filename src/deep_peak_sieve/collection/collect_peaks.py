@@ -2,9 +2,7 @@ from typing_extensions import Annotated
 from typing import Optional
 from pathlib import Path
 import numpy as np
-import matplotlib.pyplot as plt
 from audioio.audioloader import AudioLoader
-from IPython import embed
 import humanize
 from datetime import timedelta
 import typer
@@ -33,8 +31,10 @@ def initialize_dataset(path: Path):
     dataset = {
         "peaks": [],
         "channels": [],
+        "amplitudes": [],
         "centers": [],
         "start_stop_index": [],
+        "rate": None,
     }
     return dataset
 
@@ -58,7 +58,7 @@ def apply_filter(block: np.ndarray, sample_rate: float, params: dict) -> np.ndar
         log.debug("No filtering applied")
         return block
     else:
-        raise ValueError(f"Filtering mode {params["mode"]} not recognized")
+        raise ValueError(f"Filtering mode {params['mode']} not recognized")
 
 
 def detect_peaks(
@@ -227,7 +227,7 @@ def process_file(
         With a sampling rate: {data.rate} Hz.
         Recorded on {data.channels} channels.
         Buffer size: {buffersize_seconds} seconds, or {blocksize} samples.
-        Set the time window of interest to {around_peak_window*2 / data.rate} seconds.
+        Set the time window of interest to {around_peak_window * 2 / data.rate} seconds.
         """
     )
 
@@ -284,13 +284,24 @@ def process_file(
                     block_filtered, center, chans, around_peak_window
                 )
                 if mean_peak is None:
-                    msg = "Failed to compute mean peak due to index out of range or degenerate waveform."
+                    msg = "Failed to compute mean peak due to index out of range or degenerate peak shape."
                     log.warning(msg)
                     continue
 
                 # Mark which channels contributed
                 bool_channels = np.zeros(data.channels, dtype=bool)
                 bool_channels[chans] = True
+
+                # Amplitudes on each channel
+                amp_index = np.array(
+                    [
+                        np.argmax(np.abs(block_filtered[pks, ch]))
+                        for ch in range(data.channels)
+                    ]
+                )
+                amps = np.array(
+                    [block_filtered[pks, ch][idx] for ch, idx in enumerate(amp_index)]
+                )
 
                 center += blockiterval * (blocksize - overlap)
                 start_stop_index = [
@@ -299,6 +310,7 @@ def process_file(
                 ]
                 dataset["peaks"].append(mean_peak)
                 dataset["channels"].append(bool_channels)
+                dataset["amplitudes"].append(amps)
                 dataset["centers"].append(center)
                 dataset["start_stop_index"].append(start_stop_index)
                 collected_peak_counter += 1
@@ -307,8 +319,10 @@ def process_file(
 
         dataset["peaks"] = np.array(dataset["peaks"])
         dataset["channels"] = np.array(dataset["channels"])
+        dataset["amplitudes"] = np.array(dataset["amplitudes"])
         dataset["centers"] = np.array(dataset["centers"])
         dataset["start_stop_index"] = np.array(dataset["start_stop_index"])
+        dataset["rate"] = data.rate
 
         save_numpy(dataset, save_path)
 

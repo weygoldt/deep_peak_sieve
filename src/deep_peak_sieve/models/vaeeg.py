@@ -13,7 +13,7 @@ from deep_peak_sieve.models.utils import (
     plot_reconstructions,
 )
 from deep_peak_sieve.models.base import BaseVAE, LitVAE
-from deep_peak_sieve.models.params import lr, n_epochs, batch_size, gamma
+from deep_peak_sieve.models.params import lr, batch_size, gamma
 
 
 class Conv1dLayer(nn.Module):

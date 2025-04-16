@@ -6,7 +6,7 @@ from pathlib import Path
 import orjson
 
 from deep_peak_sieve.utils.loggers import get_logger, configure_logging
-from deep_peak_sieve.utils.datasets import get_file_list, save_numpy
+from deep_peak_sieve.utils.datasets import get_file_list
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
 log = get_logger(__name__)

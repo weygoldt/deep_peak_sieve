@@ -1,5 +1,7 @@
 testdata/
 lightning_logs/
+checkpoints/
+*.ckpt
 
 ### LaTeX ###
 ## Core latex/pdflatex auxiliary files:
