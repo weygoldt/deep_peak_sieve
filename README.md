@@ -79,6 +79,7 @@ sample_peaks /path/to/dataset -n 100 -vvv
 
 ## TODO ✅
 
+- [ ] Resample everything to the same sampling rate
 - [ ] Generalize to mono- and polyphasic peaks. Currently, only monophonic peaks work well because the sign of them can be easily flipped using the maximum. For polyphasic peaks, we need to consider the order of negative and positive excursions. To be implemented in `deep_peak_sieve/prepro/collect_peaks.py`.
 
 - [x] Fix the logger configurator (does not work with pkgs that have a src/ folder for some reason)

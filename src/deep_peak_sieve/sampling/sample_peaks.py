@@ -1,3 +1,4 @@
+from os import makedev
 from typing import Annotated
 from abc import abstractmethod
 import numpy as np
@@ -73,11 +74,16 @@ class StratifiedRandomSampler(BaseSampler):
 @app.command()
 def main(
     path: Path = typer.Argument(..., help="Path to the dataset"),
-    num_samples: Annotated[int, typer.Option("--num_samples", "-n")] = 1000,
+    num_samples: Annotated[int, typer.Option("--num_samples", "-n")] = 10,
     verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
 ):
     configure_logging(verbose)
-    data, _, dtype = get_file_list(path=path, filetype="npz")
+    data, _, dtype = get_file_list(path=path, filetype="npz", make_save_path=False)
+
+    # check if data is nested list
+    if isinstance(data[0], list):
+        data = [item for sublist in data for item in sublist]
+
     sampler = StratifiedRandomSampler(data, num_samples=num_samples)
     sample_indices = sampler.sample()
 
@@ -89,7 +95,12 @@ def main(
     else:
         raise ValueError(f"Unknown dataset type: {dtype}")
 
-    data = [str(file) for file in data]
+    sample_indices_index = [
+        x for x in range(len(sample_indices)) if len(sample_indices[x]) > 0
+    ]
+    sample_indices = [sample_indices[i] for i in sample_indices_index]
+    data = [data[i] for i in sample_indices_index]
+    data = [str(file.resolve()) for file in data]
     json_data = {
         "dtype": dtype,
         "num_samples": num_samples,

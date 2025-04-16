@@ -1,5 +1,6 @@
 from typing import Annotated
 import numpy as np
+from IPython import embed
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import balanced_accuracy_score, f1_score, average_precision_score
 from pathlib import Path
@@ -53,8 +54,12 @@ def main(
         all_labels.append(labels)
         all_peaks.append(labeled_peaks)
 
-    labels = np.concatenate(all_labels)
-    peaks = np.concatenate(all_peaks)
+    try:
+        labels = np.concatenate(all_labels)
+        peaks = np.concatenate(all_peaks)
+    except:
+        embed()
+        exit()
 
     print(f"Found {len(labels)} samples")
 

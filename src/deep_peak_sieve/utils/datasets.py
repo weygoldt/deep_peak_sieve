@@ -22,7 +22,7 @@ class Dict2Dataclass:
         return {key: value for key, value in self.__dict__.items()}
 
 
-def get_file_list(path: Path, filetype="wav") -> tuple:
+def get_file_list(path: Path, filetype="wav", make_save_path=True) -> tuple:
     """
     Discover the type of dataset based on the provided path.
     """
@@ -46,13 +46,15 @@ def get_file_list(path: Path, filetype="wav") -> tuple:
         subdirs = list(path.glob("*/"))
         save_dir = path.stem + "_peaks"
         save_path = path.parent / save_dir
-        save_path.mkdir(exist_ok=True)
+        if make_save_path:
+            save_path.mkdir(exist_ok=True)
         if len(subdirs) > 0:
             for subdir in subdirs:
                 sub_file_list = sorted(list(subdir.glob(f"*.{filetype}")))
                 if len(sub_file_list) > 0:
                     sub_save_dir = save_path / subdir.stem
-                    sub_save_dir.mkdir(exist_ok=True)
+                    if make_save_path:
+                        sub_save_dir.mkdir(exist_ok=True)
                     file_list.append(sub_file_list)
                     save_file_names = [file.stem + "_peaks" for file in sub_file_list]
                     save_list.append([sub_save_dir / name for name in save_file_names])

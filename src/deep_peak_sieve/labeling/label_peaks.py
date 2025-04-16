@@ -6,10 +6,11 @@ import orjson
 from pathlib import Path
 import typer
 from audioio.audioloader import AudioLoader
+from IPython import embed
 
 from deep_peak_sieve.utils.loggers import get_logger, configure_logging
 
-app = typer.Typer()
+app = typer.Typer(pretty_exceptions_show_locals=False)
 log = get_logger(__name__)
 
 
@@ -127,19 +128,36 @@ def main(
     # Load the data
     with open(path, "rb") as f:
         data = orjson.loads(f.read())
+        dtype = data["dtype"]
+        log.info(f"Loaded data of type {dtype} with {data['num_samples']} samples.")
 
         # TODO: Handle different locations of raw data for each dtype (dataset type)
         # TODO: Save the labels, implement fixing them if failed
-
-        data["labels"] = []
+        # TODO: Make original data extension flexible (.wav)
 
         for sample_indices, data_path in zip(data["sample_indices"], data["files"]):
+            log.info(f"Moving to new file {data_path}")
             data_path = Path(data_path)
-            original_subdir = data_path.parent.stem.replace("_peaks", "")
-            original_file = data_path.stem.replace("_peaks", "")
-            original_path = (
-                data_path.parent.parent / original_subdir / f"{original_file}.wav"
-            )
+
+            original_path = None
+            if dtype == "dir":
+                original_subdir = data_path.parent.stem.replace("_peaks", "")
+                original_file = data_path.stem.replace("_peaks", "")
+                original_path = (
+                    data_path.parent.parent / original_subdir / f"{original_file}.wav"
+                )
+                print(original_path)
+            elif dtype == "subdir":
+                original_dir = data_path.parent.parent.stem.replace("_peaks", "")
+                original_subdir = data_path.parent.stem
+                original_file = data_path.stem.replace("_peaks", "")
+                original_path = (
+                    data_path.parent.parent.parent
+                    / original_dir
+                    / original_subdir
+                    / f"{original_file}.wav"
+                )
+                print(original_path)
             raw_file = AudioLoader(str(original_path))
             peak_file = np.load(data_path)
             labels = np.full(peak_file["peaks"].shape[0], -1, dtype=int)
@@ -208,4 +226,3 @@ def main(
             np.savez(data_path, **new_peak_file)
 
             log.debug(f"Labels added to extracted peask at {data_path}.")
-            log.info(f"Moving to new file {data_path}")

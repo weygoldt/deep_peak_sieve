@@ -373,6 +373,13 @@ class InceptionTimeEnsemble:
     def __init__(self, n_models=5, input_size=300, num_classes=2, filters=32, depth=6):
         self.n_models = n_models
         self.models = []
+        self.device = (
+            "cuda"
+            if torch.cuda.is_available()
+            else "mps"
+            if torch.backends.mps.is_available()
+            else "cpu"
+        )
         for i in range(n_models):
             model = InceptionTimeLightning(
                 input_size=input_size,
@@ -380,6 +387,7 @@ class InceptionTimeEnsemble:
                 filters=filters,
                 depth=depth,
             )
+            model = model.to(self.device)
             self.models.append(model)
         log.info(f"Created ensemble of {n_models} models.")
 
@@ -425,6 +433,7 @@ class InceptionTimeEnsemble:
                 map_location="cpu",
                 model=self.models[i],
             )
+            self.models[i].to(self.device)
         log.info("Loaded all models from checkpoints.")
 
     def _create_datasets(self, x, y):
@@ -496,6 +505,7 @@ class InceptionTimeEnsemble:
         probs = []
 
         x = torch.from_numpy(x).float() if not isinstance(x, torch.Tensor) else x
+        x = x.to(self.device)
 
         for model in self.models:
             model.eval()
@@ -503,8 +513,8 @@ class InceptionTimeEnsemble:
                 logits = model.forward(x)
                 prob = torch.nn.functional.softmax(logits, dim=-1)
             pred = torch.argmax(prob, dim=-1)
-            preds.append(pred)
-            probs.append(prob)
+            preds.append(pred.cpu().numpy())
+            probs.append(prob.cpu().numpy())
 
         preds = np.mean(preds, axis=0)
         preds = np.round(preds).astype(int)
