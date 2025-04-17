@@ -317,12 +317,13 @@ def process_file(
                     log.warning(
                         f"Channel type is not int32 or int64 but {chans.dtype}. Converting to int32."
                     )
+                    print(chans)
                     chans = np.array(chans, dtype=np.int32)
 
                 mean_peak = compute_mean_peak(
                     block_filtered, center, chans, around_peak_window
                 )
-                if mean_peak is None:
+                if (mean_peak is None) or (len(chans) == 0):
                     msg = "Failed to compute mean peak due to index out of range or degenerate peak shape."
                     log.warning(msg)
                     continue
@@ -339,6 +340,7 @@ def process_file(
                 bool_channels = np.zeros(data.channels, dtype=bool)
                 bool_channels[chans] = True
                 print(data.channels)
+                print(pks)
 
                 # Amplitudes on each channel
                 amp_index = np.array(
