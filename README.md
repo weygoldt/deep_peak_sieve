@@ -93,11 +93,48 @@ label_peaks --help # show help
 label_peaks /path/to/json_file.json -vvv
 ```
 
-4. Training a classifier on the labeled data. To be implemented.
+The labeler is a simple `matplotlib` GUI that shows the archetype of the peak
+and the raw data around the peak. A user can press `t` for "true" (valid peak)
+or `f` for "false" (noise). Additionally, pressing `c` (for correct) will show
+the previous peak again to correct the previous label. The labels are added to
+the `.npz` file under the key `labels`. It is feasible to archieve about 1000
+labeled peaks in 15-20 minutes. This the minimum amount of data we suggest to
+get a decently trained classifier.
+
+4. Training a classifier on the labeled data. 
 
   - For a classifier, we use [InceptionTime](https://arxiv.org/abs/1909.04939),
     which is already pretty old but still fast and accurate.
-  - To train the classifier
+  - This is a simple binary time series classifier that uses convolutial
+    layers to extract features from the time series.
+
+To start training, run:
+
+```bash
+train_classifier --help # show help
+train_classifier /path/to/json_file.json -vvv
+```
+
+To get visual feedback on how training is going, we use tensorboard. To start
+tensorboard, run from the root of the project:
+
+```bash
+tensorboard --logdir .
+```
+
+This will start a local server on port 6006. You can then open your browser and
+go to `http://localhost:6006` to see the training progress. You can also
+specify a different port by adding the `--port` flag to the command.
+
+5. Classifying all detected peaks with the trained classifier.
+
+   - After training, we can use the classifier to classify all detected peaks
+   in the dataset. This is done by running the `classify_peaks` command.
+   - The classifier will classify each peak as either noise or valid peak and
+   save the results to a new `.npz` file. The new file will contain the same
+   data as the original `.npz` file, but with an additional array called
+   `predictions` that contains the predicted labels for each peak.
+
 
 1. Inference
 

@@ -227,9 +227,11 @@ def process_file(
     # Configuration
     min_peak_distance = int(np.ceil(peak_distance_s * data.rate))
     around_peak_window = int(np.round(0.75 * min_peak_distance))
+    window_length = int(np.ceil(smoothing_window_s * data.rate))
+    polyorder = 3
     filtering_params = dict(
         mode="savgol",
-        window_length=int(np.ceil(smoothing_window_s * data.rate)),
+        window_length=window_length if window_length > polyorder else polyorder + 1,
         polyorder=3,
     )
 
