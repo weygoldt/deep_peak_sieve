@@ -315,17 +315,17 @@ def process_file(
                 if chans.dtype not in [np.int32, np.int64, np.bool]:
                     # This should not happen, but just in case
                     log.warning(
-                        f"Channel type is not int32 or int64 but {chans.dtype}. Converting to int32."
+                        f"Channel type is not int32 or int64 but {chans.dtype}. Converting to int64."
                     )
-                    chans = np.array(chans, dtype=np.int32)
+                    chans = np.array(chans, dtype=np.int64)
 
                 pks = np.array(pks)
                 if pks.dtype not in [np.int32, np.int64]:
                     # This should not happen, but just in case
                     log.warning(
-                        f"Peak type is not int32 or int64 but {pks.dtype}. Converting to int32."
+                        f"Peak type is not int32 or int64 but {pks.dtype}. Converting to int64."
                     )
-                    pks = np.array(pks, dtype=np.int32)
+                    pks = np.array(pks, dtype=np.int64)
 
                 mean_peak = compute_mean_peak(
                     block_filtered, center, chans, around_peak_window
