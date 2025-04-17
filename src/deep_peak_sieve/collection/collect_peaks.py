@@ -8,6 +8,7 @@ from datetime import timedelta
 import typer
 from scipy.signal import find_peaks, savgol_filter
 from scipy.interpolate import interp1d
+from IPython import embed
 
 from deep_peak_sieve.utils.loggers import get_logger, get_progress, configure_logging
 from deep_peak_sieve.collection.filters import bandpass_filter
@@ -170,7 +171,14 @@ def compute_mean_peak(
         log.warning("Index out of bounds for peak window, skipping peak.")
         return None
 
-    peak_snippet = block_filtered[indexer][:, channels]
+    try:
+        peak_snippet = block_filtered[indexer][:, channels]
+    except:
+        print(indexer)
+        print(channels)
+        print(block_filtered.shape)
+        embed()
+        exit()
 
     # Pull each channel baseline to zero
     baseline_window = around_peak_window // 4
