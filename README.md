@@ -4,9 +4,25 @@
 
 ---
 
+## Motivation 💡
+
+When working with biological signals where peaks are the main feature of
+interest, we are often faced with the tradeoff between a high false positive
+rate (detecting noise as peaks) and a high false negative rate (missing true
+peaks but detecting less noise). The lower we set a threshold, the more true
+peaks we get but also the more noise we detect. This is especially problematic
+when the signal-to-noise ratio is low, as it can lead to a large number of
+false positives and make it difficult to identify true peaks. To fix this, we
+need to be able to distinguish between true peaks and noise in the peaks we
+detect.
+
 ## Overview 🔎
 
-This project aims to provide a peak detection algorithm that is robust to noise and applicable across various domains. The core idea is to combine the accuracy of supervised deep learning with strategies that counteract biases from training data and avoid hand-tuned heuristics. Instead, the pipeline relies on learned feature extraction directly from the data.
+This project aims to provide a peak detection algorithm that is robust to noise
+and applicable across various domains. The core idea is to combine the accuracy
+of supervised deep learning with strategies that counteract biases from
+training data and avoid hand-tuned heuristics. Instead, the pipeline relies on
+learned feature extraction directly from the data.
 
 ### Pipeline Summary
 
