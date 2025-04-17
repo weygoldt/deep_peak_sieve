@@ -311,9 +311,11 @@ def process_file(
             for peakiterval, (pks, chans, center) in enumerate(
                 zip(grouped_peaks, grouped_channels, centers)
             ):
-                if not chans[0].dtype == np.int32:
+                chans = np.array(chans)
+                if chans.dtype not in [np.int32, np.int64, np.bool]:
+                    # This should not happen, but just in case
                     log.warning(
-                        f"For some reason, the channel type is not int32 but {chans[0].dtype}"
+                        f"Channel type is not int32 or int64 but {chans.dtype}. Converting to int32."
                     )
                     chans = np.array(chans, dtype=np.int32)
 
