@@ -311,6 +311,12 @@ def process_file(
             for peakiterval, (pks, chans, center) in enumerate(
                 zip(grouped_peaks, grouped_channels, centers)
             ):
+                if not chans[0].dtype == np.int32:
+                    log.warning(
+                        f"For some reason, the channel type is not int32 but {chans[0].dtype}"
+                    )
+                    chans = np.array(chans, dtype=np.int32)
+
                 mean_peak = compute_mean_peak(
                     block_filtered, center, chans, around_peak_window
                 )
