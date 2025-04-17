@@ -1,8 +1,0 @@
-audioio==2.5.0
-deep_peak_sieve==0.1.0
-deep_peak_sieve.egg==info
-ipython==8.12.3
-lightning==2.5.1
-torch==2.6.0
-torchinfo==1.8.0
-umap_learn==0.5.7
