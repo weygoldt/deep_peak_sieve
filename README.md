@@ -123,11 +123,16 @@ classify_peaks /path/to/dataset_peaks -vvv
 
 ## TODO ✅
 
-- [ ] Make smoothing and resampling configurable via CLI
-- [ ] Set smoothing window by time instead of samples
-- [ ] Resample all inputs to the same sampling rate
+- [ ] Implement active learnign. Currently, we just label -> train -> classify. For that, checkout python package [baal](https://github.com/baal-org/baal?tab=readme-ov-file)
+- [ ] Implement the latent space sampling strategy, currently we just do stratified random sampling.
 - [ ] Generalize to mono- and polyphasic peaks  
       _Currently, only monophonic peaks are well-supported. Polyphasic peaks require handling the order of positive and negative excursions (see `deep_peak_sieve/prepro/collect_peaks.py`)._
+
+## DONE 🎉
+
+- [x] Make smoothing and resampling configurable via CLI
+- [x] Set smoothing window by time instead of samples
+- [x] Resample all inputs to the same sampling rate
 - [x] Fix logger configurator (issue with `src/` directory structures)
 
 ---
