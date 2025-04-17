@@ -348,15 +348,15 @@ def process_file(
                 bool_channels = np.zeros(data.channels, dtype=bool)
                 bool_channels[chans] = True
 
-                print("-------------------------------------")
-                print("data.channels:")
-                print(data.channels)
-                print("pks:")
-                print(pks)
-                print("chans:")
-                print(chans)
-                print("block_filtered.shape:")
-                print(block_filtered.shape)
+                # print("-------------------------------------")
+                # print("data.channels:")
+                # print(data.channels)
+                # print("pks:")
+                # print(pks)
+                # print("chans:")
+                # print(chans)
+                # print("block_filtered.shape:")
+                # print(block_filtered.shape)
 
                 # Amplitudes on each channel
                 amp_index = np.array(
