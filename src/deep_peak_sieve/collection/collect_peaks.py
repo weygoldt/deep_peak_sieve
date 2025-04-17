@@ -171,6 +171,8 @@ def compute_mean_peak(
         log.warning("Index out of bounds for peak window, skipping peak.")
         return None
 
+    channels = np.array(channels, dtype=np.int32)
+
     try:
         peak_snippet = block_filtered[indexer][:, channels]
     except:
