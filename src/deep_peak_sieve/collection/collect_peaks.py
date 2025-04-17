@@ -46,7 +46,13 @@ def apply_filter(block: np.ndarray, sample_rate: float, params: dict) -> np.ndar
     """
     if params["mode"] == "savgol":
         log.debug("Applying Savitzky-Golay filter")
-        return savgol_filter(block.T, params["window_length"], params["polyorder"]).T
+        return savgol_filter(
+            block.T,
+            window_length=params["window_length"],
+            polyorder=params["polyorder"],
+            # params["window_length"],
+            # params["polyorder"],
+        ).T
     elif params["mode"] == "bandpass":
         log.debug("Applying bandpass filter")
         return bandpass_filter(

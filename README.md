@@ -13,12 +13,25 @@ from the data to make decisions.
 
 The pipeline consists of several steps:
 
-1. **Preprocessing**: The raw data is preprocessed to remove noise and artifacts by filtering and smoothing.
-1. **Feature Extraction**: Peaks are detected on a per-channel basis using a low amplitude threshold and temporal constraints.
-1. **Embedding**: The detected peaks are embedded in a latent space using a Variational Autoencoder (VAE).
-1. **Labeling**: The latent space is regularly sampled and a mini GUI is provided to label the detected peaks as either noise or valid peaks. Options include regular sampling, random sampling or sampling based on the structure of the latent space (such as biasing towards high density or low density regions).
-1. **Classification**: A simple classifier is trained on the labeled data to classify the detected peaks as either noise or valid peaks.
-1. **Active learning**: The classifier is used to classify all detected peaks and the results are used to improve the model by retraining it on the newly classified data. This can be done in an iterative fashion to improve the model over time. Alternatively, a human can review and label previously unlabeled and hard to classify data points to improve the model.
+1. **Preprocessing**: The raw data is preprocessed to remove noise and
+   artifacts by filtering and smoothing.
+
+2. **Feature Extraction**: Peaks are detected on a per-channel basis using a
+   low amplitude threshold and temporal constraints.
+
+3. **Labeling**: The latent space is regularly sampled and a mini GUI is
+   provided to label the detected peaks as either noise or valid peaks. Options
+   include regular sampling, random sampling or sampling based on the structure of
+   the latent space (such as biasing towards high density or low density regions).
+
+4. **Classification**: A simple classifier is trained on the labeled data to
+   classify the detected peaks as either noise or valid peaks.
+
+5. **Active learning**: The classifier is used to classify all detected peaks
+   and the results are used to improve the model by retraining it on the newly
+   classified data. This can be done in an iterative fashion to improve the model
+   over time. Alternatively, a human can review and label previously unlabeled and
+   hard to classify data points to improve the model.
 
 ## Quickstart 🚀
 
@@ -73,15 +86,29 @@ sample_peaks /path/to/dataset -n 100 -vvv
      label it as a valid peak (or `-1` as "no label"). The labeled peaks are added
      as an additional array to the `.npz` file under the key `labels`.
 
-1. Training a classifier on the labeled data. To be implemented.
+To use the JSON file to label the peaks, run:
+
+```bash
+label_peaks --help # show help
+label_peaks /path/to/json_file.json -vvv
+```
+
+4. Training a classifier on the labeled data. To be implemented.
+
+  - For a classifier, we use [InceptionTime](https://arxiv.org/abs/1909.04939),
+    which is already pretty old but still fast and accurate.
+  - To train the classifier
 
 1. Inference
 
 ## TODO ✅
 
 - [ ] Make smoothing and resampling configurable over cli
+
 - [ ] Set the smothing window by time not by samples
+
 - [ ] Resample everything to the same sampling rate
+
 - [ ] Generalize to mono- and polyphasic peaks. Currently, only monophonic peaks work well because the sign of them can be easily flipped using the maximum. For polyphasic peaks, we need to consider the order of negative and positive excursions. To be implemented in `deep_peak_sieve/prepro/collect_peaks.py`.
 
 - [x] Fix the logger configurator (does not work with pkgs that have a src/ folder for some reason)
