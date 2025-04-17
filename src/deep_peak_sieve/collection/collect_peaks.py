@@ -7,6 +7,7 @@ import humanize
 from datetime import timedelta
 import typer
 from scipy.signal import find_peaks, savgol_filter
+from scipy.interpolate import interp1d
 
 from deep_peak_sieve.utils.loggers import get_logger, get_progress, configure_logging
 from deep_peak_sieve.collection.filters import bandpass_filter
@@ -202,32 +203,44 @@ def compute_mean_peak(
 
 
 def process_file(
-    data: AudioLoader, save_path: Path, path: Path, buffersize_seconds: int = 60
+    data: AudioLoader,
+    save_path: Path,
+    path: Path,
+    buffersize_s: int = 60,
+    min_channels_with_peaks: int = 4,
+    smoothing_window_s: float = 0.0001,
+    peak_distance_s: float = 0.004,
+    peak_height_threshold: float = 0.001,
+    resample: bool = True,
+    n_resamples: int = 512,
 ):
     data.set_unwrap(thresh=1.5)
-    blocksize = int(np.ceil(data.rate * buffersize_seconds))
+    blocksize = int(np.ceil(data.rate * buffersize_s))
     overlap = blocksize // 10  # Just a bit clearer than int(np.ceil(blocksize // 10))
 
     # Configuration
-    peak_height_threshold = 0.001
-    min_peak_distance_seconds = 0.004  # 2ms
-    min_peak_distance = int(np.ceil(min_peak_distance_seconds * data.rate))
+    min_peak_distance = int(np.ceil(peak_distance_s * data.rate))
     around_peak_window = int(np.round(0.75 * min_peak_distance))
-    min_channels_with_peaks = 4
     filtering_params = dict(
         mode="savgol",
-        window_length=11,
+        window_length=int(np.ceil(smoothing_window_s * data.rate)),
         polyorder=3,
     )
 
     log.info(
         f"""
-        Processing dataset: {path.name}.
+        Processing dataset: {data.filepath}.
         Recording duration: {pretty_duration_humanize(data.shape[0] / data.rate)}.
         With a sampling rate: {data.rate} Hz.
         Recorded on {data.channels} channels.
-        Buffer size: {buffersize_seconds} seconds, or {blocksize} samples.
+        Set buffersize_s: {buffersize_s} seconds, or {blocksize} samples.
+        Set block_overlap to {overlap} samples.
         Set the time window of interest to {around_peak_window * 2 / data.rate} seconds.
+        Set minimum peak distance: {peak_distance_s} seconds, or {min_peak_distance} samples.
+        Set minimum peak height: {peak_height_threshold}.
+        Set minimum channels with peaks: {min_channels_with_peaks}.
+        Set smoothing window: {smoothing_window_s} seconds, or {filtering_params["window_length"]} samples.
+        Set resampling to {resample} with {n_resamples} samples.
         """
     )
 
@@ -238,7 +251,7 @@ def process_file(
     num_blocks = int(np.ceil(data.shape[0] / (blocksize - overlap)))
     with get_progress() as pbar:
         desc = "Processing file"
-        task = pbar.add_task(desc, total=num_blocks - 1, transient=True)
+        task = pbar.add_task(desc, total=num_blocks, transient=True)
         for blockiterval, block in enumerate(
             data.blocks(block_size=blocksize, noverlap=overlap)
         ):
@@ -288,6 +301,14 @@ def process_file(
                     log.warning(msg)
                     continue
 
+                # Resample mean peak
+                if resample:
+                    log.debug("Resampling mean peak")
+                    x = np.linspace(0, len(mean_peak), len(mean_peak))
+                    f = interp1d(x, mean_peak, kind="cubic")
+                    xnew = np.linspace(0, len(mean_peak), n_resamples)
+                    mean_peak = f(xnew)
+
                 # Mark which channels contributed
                 bool_channels = np.zeros(data.channels, dtype=bool)
                 bool_channels[chans] = True
@@ -327,8 +348,41 @@ def process_file(
         save_numpy(dataset, save_path)
 
 
-def collect_peaks(
-    path: Path, savepath: Path, filetype="wav", buffersize_seconds: int = 60
+@app.command()
+def main(
+    datapath: Annotated[Path, typer.Argument(help="Path to the dataset.")],
+    verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
+    filetype: Annotated[
+        str, typer.Option("--filetype", "-f", help="File type to detect peaks on.")
+    ] = "wav",
+    buffersize_seconds: Annotated[
+        int, typer.Option("--buffersize", "-b", help="Buffer size in seconds.")
+    ] = 60,
+    min_channels_with_peaks: Annotated[
+        int, typer.Option("--min_channels", "-mc", help="Minimum channels with peaks.")
+    ] = 4,
+    smoothing_window_s: Annotated[
+        float,
+        typer.Option("--smoothing_window", "-sw", help="Smoothing window in seconds."),
+    ] = 0.0001,
+    peak_distance_s: Annotated[
+        float,
+        typer.Option(
+            "--peak_distance", "-pd", help="Minimum distance between peaks in seconds."
+        ),
+    ] = 0.004,
+    peak_height_threshold: Annotated[
+        float,
+        typer.Option(
+            "--peak_height", "-ph", help="Minimum height of peaks in amplitude."
+        ),
+    ] = 0.001,
+    resample: Annotated[
+        bool, typer.Option("--resample", "-r", help="Resample the data.")
+    ] = True,
+    n_resamples: Annotated[
+        int, typer.Option("--n_resamples", "-nr", help="Number of resamples.")
+    ] = 512,
 ):
     """
     Main function to orchestrate:
@@ -339,18 +393,22 @@ def collect_peaks(
     5) Waveform extraction
     6) Dataset saving
     """
-    file_list, save_list = load_raw_data(path=path, filetype=filetype)
-    for data, save_path in zip(file_list, save_list):
-        process_file(data, save_path, path, buffersize_seconds)
 
-
-@app.command()
-def main(
-    datapath: Path,
-    verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
-):
     savepath = (
         None  # Maybe for later when we want to save the extracted peaks somewhere else
     )
     configure_logging(verbosity=verbose)
-    collect_peaks(path=datapath, savepath=savepath, buffersize_seconds=60)
+    file_list, save_list = load_raw_data(path=datapath, filetype=filetype)
+    for data, save_path in zip(file_list, save_list):
+        process_file(
+            data,
+            save_path,
+            datapath,
+            buffersize_seconds,
+            min_channels_with_peaks,
+            smoothing_window_s,
+            peak_distance_s,
+            peak_height_threshold,
+            resample,
+            n_resamples,
+        )

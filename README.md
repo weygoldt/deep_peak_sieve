@@ -79,6 +79,8 @@ sample_peaks /path/to/dataset -n 100 -vvv
 
 ## TODO ✅
 
+- [ ] Make smoothing and resampling configurable over cli
+- [ ] Set the smothing window by time not by samples
 - [ ] Resample everything to the same sampling rate
 - [ ] Generalize to mono- and polyphasic peaks. Currently, only monophonic peaks work well because the sign of them can be easily flipped using the maximum. For polyphasic peaks, we need to consider the order of negative and positive excursions. To be implemented in `deep_peak_sieve/prepro/collect_peaks.py`.
 
