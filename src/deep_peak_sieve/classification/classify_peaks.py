@@ -31,39 +31,37 @@ def main(
     if isinstance(file_list[0], list):
         file_list = [item for sublist in file_list for item in sublist]
 
-    # with get_progress() as pbar:
-    # task = pbar.add_task("Classifying peaks", total=len(file_list))
-    for file in file_list:
-        data = np.load(file)
-        peaks = data["peaks"]
+    with get_progress() as pbar:
+        task = pbar.add_task("Classifying peaks", total=len(file_list))
+        for i, file in enumerate(file_list):
+            data = np.load(file)
+            peaks = data["peaks"]
 
-        mu, std = np.mean(peaks), np.std(peaks)
-        peaks = (peaks - mu) / std
-        # print(np.shape(peaks))
-        # plt.plot(peaks.T, label="Peaks", color="grey", alpha=0.5)
-        # plt.show()
+            # mu, std = np.mean(peaks), np.std(peaks)
+            # peaks = (peaks - mu) / std
+            # print(np.shape(peaks))
+            # plt.plot(peaks.T, label="Peaks", color="grey", alpha=0.5)
+            # plt.show()
 
-        peaks = np.expand_dims(peaks, axis=1)  # Add channel dimension
+            peaks = np.expand_dims(peaks, axis=1)  # Add channel dimension
 
-        preds, probs = model.predict(peaks)
+            preds, probs = model.predict(peaks)
 
-        new_data = {}
-        for key, val in data.items():
-            new_data[key] = val
+            new_data = {}
+            for key, val in data.items():
+                new_data[key] = val
 
-        fig, axs = plt.subplots(1, 2, constrained_layout=True)
-        peaks = peaks.squeeze()
-        print(np.shape(peaks))
-        false_peaks = peaks[preds == 0, :]
-        true_peaks = peaks[preds == 1, :]
-        embed()
-        exit()
-        axs[0].plot(false_peaks.T, label="False Peaks", color="grey", alpha=0.5)
-        axs[1].plot(true_peaks.T, label="True Peaks", color="grey", alpha=0.5)
-        plt.show()
+            fig, axs = plt.subplots(1, 2, constrained_layout=True)
+            peaks = peaks.squeeze()
+            false_peaks = peaks[preds == 0, :]
+            true_peaks = peaks[preds == 1, :]
+            axs[0].plot(false_peaks.T, label="False Peaks", color="grey", alpha=0.5)
+            axs[1].plot(true_peaks.T, label="True Peaks", color="grey", alpha=0.5)
+            filename = f"classified_peaks_{i}.png"
+            plt.savefig(filename)
 
-        new_data["predicted_labels"] = preds
-        new_data["predicted_probs"] = probs
+            new_data["predicted_labels"] = preds
+            new_data["predicted_probs"] = probs
 
-        np.savez(file, **new_data)
-        # pbar.advance(task, 1)
+            np.savez(file, **new_data)
+            pbar.advance(task, 1)
