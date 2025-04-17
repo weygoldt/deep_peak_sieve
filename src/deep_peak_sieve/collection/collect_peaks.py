@@ -408,6 +408,7 @@ def main(
     configure_logging(verbosity=verbose)
     file_list, save_list = load_raw_data(path=datapath, filetype=filetype)
     for data, save_path in zip(file_list, save_list):
+        data = AudioLoader(data)
         process_file(
             data,
             save_path,

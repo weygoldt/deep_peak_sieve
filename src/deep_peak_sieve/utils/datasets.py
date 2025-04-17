@@ -81,17 +81,21 @@ def load_raw_data(path: Path, filetype="wav") -> tuple:
 
     file_list, save_list, dtype = get_file_list(path, filetype)
     if dtype == "file":
-        return [AudioLoader(str(path))], save_list
+        # return [AudioLoader(str(path))], save_list
+        return [str(path)], save_list
+
     elif dtype == "dir":
-        data = [AudioLoader(str(file)) for file in file_list]
-        return data, save_list
+        # data = [AudioLoader(str(file)) for file in file_list]
+        # return data, save_list
+        return [str(file) for file in file_list], save_list
     elif dtype == "subdir":
         data = []
         savelist = []
         for subdir, savepaths in zip(file_list, save_list):
             for file, savefile in zip(subdir, savepaths):
-                sub_data = AudioLoader(str(file))
-                data.append(sub_data)
+                # sub_data = AudioLoader(str(file))
+                # data.append(sub_data)
+                data.append(str(file))
                 savelist.append(savefile)
         return data, savelist
     else:
