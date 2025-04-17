@@ -338,6 +338,7 @@ def process_file(
                 # Mark which channels contributed
                 bool_channels = np.zeros(data.channels, dtype=bool)
                 bool_channels[chans] = True
+                print(data.channels)
 
                 # Amplitudes on each channel
                 amp_index = np.array(
