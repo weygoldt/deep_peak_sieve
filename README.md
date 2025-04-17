@@ -25,6 +25,13 @@ This project aims to provide a peak detection algorithm that is robust to noise 
 5. **Active Learning**  
    Use the trained classifier to label all detected peaks and iteratively refine the model. Optionally, a human can relabel ambiguous cases.
 
+> **NOTE:** This project is still in very early stages and is not yet fully
+> functional. The goal is to create a robust and flexible peak detection
+> pipeline that can be applied to various datasets and domains. At this point,
+> the most useful application is to classify electric eel discharges from
+> multi-channel electric recordings as those produced by the
+> [TeeGrid](https://github.com/janscience/TeeGrid).
+
 ---
 
 ## Quickstart 🚀
