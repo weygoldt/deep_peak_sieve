@@ -1,190 +1,168 @@
 # Deep Peak Sieve
 
-Deep Peak Sieve is a peak detector for 1D signals (on steroids 💊).
+**Deep Peak Sieve** is a peak detector for 1D signals (on steroids 💊).
+
+---
 
 ## Overview 🔎
 
-The goal of this project is to provide a peak detection algorithm that is
-robust to noise and can be used in a variety of applications. It is to achieve
-the accuracy of supervised deep learning while purposely working against
-missing interesting events due to biased training data. And to prevent hand
-tuned features as heuristics and instead rely on learned feature extraction
-from the data to make decisions.
+This project aims to provide a peak detection algorithm that is robust to noise and applicable across various domains. The core idea is to combine the accuracy of supervised deep learning with strategies that counteract biases from training data and avoid hand-tuned heuristics. Instead, the pipeline relies on learned feature extraction directly from the data.
 
-The pipeline consists of several steps:
+### Pipeline Summary
 
-1. **Preprocessing**: The raw data is preprocessed to remove noise and
-   artifacts by filtering and smoothing.
+1. **Preprocessing**  
+   Filter and smooth raw data to remove noise and artifacts.
 
-2. **Feature Extraction**: Peaks are detected on a per-channel basis using a
-   low amplitude threshold and temporal constraints.
+2. **Feature Extraction**  
+   Detect peaks on a per-channel basis using a low amplitude threshold and temporal constraints.
 
-3. **Labeling**: The latent space is regularly sampled and a mini GUI is
-   provided to label the detected peaks as either noise or valid peaks. Options
-   include regular sampling, random sampling or sampling based on the structure of
-   the latent space (such as biasing towards high density or low density regions).
+3. **Labeling**  
+   A latent space is created and sampled (randomly or based on its structure), and a mini GUI is provided to label peaks as either valid or noise.
 
-4. **Classification**: A simple classifier is trained on the labeled data to
-   classify the detected peaks as either noise or valid peaks.
+4. **Classification**  
+   Train a classifier on the labeled peaks to distinguish signal from noise.
 
-5. **Active learning**: The classifier is used to classify all detected peaks
-   and the results are used to improve the model by retraining it on the newly
-   classified data. This can be done in an iterative fashion to improve the model
-   over time. Alternatively, a human can review and label previously unlabeled and
-   hard to classify data points to improve the model.
+5. **Active Learning**  
+   Use the trained classifier to label all detected peaks and iteratively refine the model. Optionally, a human can relabel ambiguous cases.
+
+---
 
 ## Quickstart 🚀
 
-This project is not nicely packaged yet, so you have to install it manually:
+This project is not yet packaged for PyPI, so manual installation is required:
 
 ```bash
 git clone https://github.com/weygoldt/deep_peak_sieve
 cd deep_peak_sieve
-pip install -r requirements.txt # install the dependencies
-pip install -e . # install the package in editable mode
+pip install -r requirements.txt  # install dependencies
+pip install -e .                 # install in editable mode
 ```
 
-A general workflow includes the following steps:
+---
 
-1. Detecting peaks in a signal. This is kept very simple here:
-   - Use a low amplitude threshold to detect peaks.
-   - Do not distinguish between positive and negative "peaks".
-   - Use temporal constraints to filter out false positives (two peaks need to be at least x ms apart).
-   - An archetype of each peak (mean across all channels), start and stop index in the dataset, and path to the dataset are saved to a `.npz` file. For each file in the dataset, one `.npz` file is created.
+## Workflow
 
-To start peak detection, run:
+### 1. Detect Peaks
+
+- Use a low amplitude threshold.
+- Do not distinguish between positive/negative peaks.
+- Apply a minimum temporal distance between peaks.
+- Save peak archetypes, start/stop indices, and paths in `.npz` files (one per dataset file).
 
 ```bash
-collect_peaks --help # show help
+collect_peaks --help
 collect_peaks /path/to/dataset -vvv
 ```
 
-2. Sampling a subset of all detected peaks for labeling.
-   - Currently, this is simple random sampling. But in the future, I want to
-     embed the peaks in a latent space and sample the latent space in a
-     structured way (e.g. bias towards high density regions or low density
-     regions). To start, we should implement this first via PCA, then UMAP and
-     finally a VAE to compare the results.
-   - For sampling, the application creates a `<dataset_name>_samples.json`
-     file. This file contains the indices for the chosen peaks and the path to
-     each `.npz` file it chose the indices from. So this is just a "pointer".
+---
 
-To sample a subset and create the JSON file, run:
+### 2. Sample Peaks
+
+- Currently: random sampling.
+- Future plans: sample in latent space using PCA, UMAP, or a VAE.
+
+Creates a `<dataset_name>_samples.json` file containing:
+- Peak indices
+- Path to each corresponding `.npz` file
 
 ```bash
-sample_peaks --help # show help
+sample_peaks --help
 sample_peaks /path/to/dataset -n 100 -vvv
 ```
 
-3. Labeling peaks to train a classifier
+---
 
-   - During labeling, we will now go through all the samples in the JSON file
-     and show the user the archetype of the peak and the raw data of the peak.
-   - The user can then label the peak as either noise or valid peak. The labeling
-     is done via a `matplotlib` GUI that shows the archetype and the raw data of
-     the peak. The user can then press `0` to label the peak as noise or `1` to
-     label it as a valid peak (or `-1` as "no label"). The labeled peaks are added
-     as an additional array to the `.npz` file under the key `labels`.
+### 3. Label Peaks
 
-To use the JSON file to label the peaks, run:
+- Review each peak using a simple `matplotlib` GUI.
+- Label keys:
+  - `t`: valid peak (true)
+  - `f`: noise (false)
+  - `c`: correct previous label
+- Labels are saved under the `labels` key in the `.npz` file.
 
 ```bash
-label_peaks --help # show help
+label_peaks --help
 label_peaks /path/to/json_file.json -vvv
 ```
 
-The labeler is a simple `matplotlib` GUI that shows the archetype of the peak
-and the raw data around the peak. A user can press `t` for "true" (valid peak)
-or `f` for "false" (noise). Additionally, pressing `c` (for correct) will show
-the previous peak again to correct the previous label. The labels are added to
-the `.npz` file under the key `labels`. It is feasible to archieve about 1000
-labeled peaks in 15-20 minutes. This the minimum amount of data we suggest to
-get a decently trained classifier.
+You can label ~1000 peaks in ~15–20 minutes, which is usually enough for a decent classifier.
 
-4. Training a classifier on the labeled data. 
+---
 
-  - For a classifier, we use [InceptionTime](https://arxiv.org/abs/1909.04939),
-    which is already pretty old but still fast and accurate.
-  - This is a simple binary time series classifier that uses convolutial
-    layers to extract features from the time series.
+### 4. Train a Classifier
 
-To start training, run:
+- Uses [InceptionTime](https://arxiv.org/abs/1909.04939), a fast and accurate time-series classifier.
+- Convolutional layers extract features from the labeled time series.
 
 ```bash
-train_classifier --help # show help
+train_classifier --help
 train_classifier /path/to/json_file.json -vvv
 ```
 
-To get visual feedback on how training is going, we use tensorboard. To start
-tensorboard, run from the root of the project:
+Start TensorBoard to monitor training:
 
 ```bash
 tensorboard --logdir .
+# Open http://localhost:6006 in your browser
 ```
 
-This will start a local server on port 6006. You can then open your browser and
-go to `http://localhost:6006` to see the training progress. You can also
-specify a different port by adding the `--port` flag to the command.
+---
 
-5. Classifying all detected peaks with the trained classifier.
+### 5. Classify All Detected Peaks
 
-   - After training, we can use the classifier to classify all detected peaks
-   in the dataset. This is done by running the `classify_peaks` command.
-   - The classifier will classify each peak as either noise or valid peak and
-   save the results to a new `.npz` file. The new file will contain the same
-   data as the original `.npz` file, but with an additional array called
-   `predictions` that contains the predicted labels for each peak.
+- Classifier labels each peak as signal or noise.
+- Saves results in a new `.npz` file under the key `predicted_labels`.
 
+```bash
+classify_peaks --help
+classify_peaks /path/to/dataset_peaks -vvv
+```
 
-1. Inference
+---
 
 ## TODO ✅
 
-- [ ] Make smoothing and resampling configurable over cli
+- [ ] Make smoothing and resampling configurable via CLI
+- [ ] Set smoothing window by time instead of samples
+- [ ] Resample all inputs to the same sampling rate
+- [ ] Generalize to mono- and polyphasic peaks  
+      _Currently, only monophonic peaks are well-supported. Polyphasic peaks require handling the order of positive and negative excursions (see `deep_peak_sieve/prepro/collect_peaks.py`)._
+- [x] Fix logger configurator (issue with `src/` directory structures)
 
-- [ ] Set the smothing window by time not by samples
+---
 
-- [ ] Resample everything to the same sampling rate
+## Other Notes
 
-- [ ] Generalize to mono- and polyphasic peaks. Currently, only monophonic peaks work well because the sign of them can be easily flipped using the maximum. For polyphasic peaks, we need to consider the order of negative and positive excursions. To be implemented in `deep_peak_sieve/prepro/collect_peaks.py`.
+**GitHub Organization**: [OpenEfish](https://github.com/OpenEfish)
 
-- [x] Fix the logger configurator (does not work with pkgs that have a src/ folder for some reason)
+### Pulse Detection
 
-# Other Notes
+- Low-threshold detection with a fixed amplitude threshold.
+- Optional peak/trough sorting heuristic (see work by Liz).
+- Build a generalized signal-vs-noise classifier:
+  - Record "empty" data without fish.
+  - Train a model to recognize true pulses vs background noise.
+  - Explore anomaly detection techniques.
+- Normalize pulse polarity (flip if necessary).
 
-GITHUB Orga: OpenEfish
+### Pulse Filtering
 
-- Pulse detection:
+- Use power spectrum or trained noise classifier to clean the signal.
 
-  - Low threshold peak detection but we need a hard amplitude threshold in any case
-  - Peak sorting (some kind of peak/trough sorting heuristic, see Liz)
-  - We need a generalized signal vs noise classifier: Redord recordings without any fish and train a model onto that, keyword "anomaly detection"
-    - Write a generalized pulse detector and run it on data without any pulses and train a model that classifies noise yes/no to filter real pulses
-  - Bring to same sign (flip if needed)
+### Feature Extraction
 
-- Pulse filtering
+- Learn representations via:
+  - VAE
+  - UMAP / PCA
+- Experiment with combinations:
+  - VAE only
+  - VAE + PCA
+  - VAE + UMAP
+  - VAE + UMAP + PCA
 
-  - E.g. with powerspectrum, or with the generalized noise detector
+### Clustering
 
-- Smooth (e.g. spline) interpolation
+- Use unsupervised methods like HDBSCAN or neural clustering approaches.
 
-- Feature extraction
-
-  - VAE to learn a meaningful representation of the data
-  - UMAP/PCA to visualize the latent space or further reduce the dimensionality
-  - NOTE: We need to test: Only VAE, Only UMAP, VAE + UMAP, VAE + PCA, VAE + UMAP + PCA and so on
-
-- Clustering
-
-  - HDBSCAN or other neural clustering
-
-## Overpowered Pulsedetector
-
-- Detect pulses with low absolute threshold peak detection
-- For each pulse, save head to tail approx, raw pulse on all channels, timepoint, index, file, etc.
-- Using the HTT approx, embed pulses in feature space with a VAE
-- Regularly sample the latent space for e.g. 1000 points
-- Mini MPL gui where you can press 0/1 to classify the pulses as pulses or noise. Should save pulses in a list of some sort that is saved to disk for each label. Should also have the option to correct previous mistakes, e.g. print the index of the pulse to the terminal or in mpl title.
-- Use labels to train a simple classifier on the HTTapprox or even the raw pulse on each channel.
-- Classify all detected pulses and continue working with them in other analysis steps.
-  -> WOW!
+> **WOW!** 🎉
