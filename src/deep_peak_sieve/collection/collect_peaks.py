@@ -450,7 +450,11 @@ def main(
             log.info(f"File {save_path} already exists, skipping.")
             continue
 
-        data = AudioLoader(data)
+        try:
+            data = AudioLoader(data)
+        except Exception as e:
+            log.error(f"Failed to load {data}: {e}")
+            continue
         process_file(
             data,
             save_path,
