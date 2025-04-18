@@ -146,6 +146,8 @@ classify_peaks /path/to/dataset_peaks -vvv
 
 ## TODO ✅
 
+- [ ] Implement incremental labeling: The labeler should check if there is already a label for the present sample and skip it.
+- [ ] Implement incremental peak detection: When detecting on a large dataset and an error occurs, it should not start completely from scratch again.
 - [ ] Implement active learnign. Currently, we just label -> train -> classify. For that, checkout python package [baal](https://github.com/baal-org/baal?tab=readme-ov-file)
 - [ ] Implement the latent space sampling strategy, currently we just do stratified random sampling.
 - [ ] Generalize to mono- and polyphasic peaks  
