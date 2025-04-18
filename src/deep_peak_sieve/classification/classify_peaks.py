@@ -25,7 +25,7 @@ def main(
     configure_logging(verbose)
     model = InceptionTimeEnsemble()
     model.load_model(chkpt_dir)
-    file_list, _, dtype = get_file_list(path, filetype="npz")
+    file_list, _, dtype = get_file_list(path, filetype="npz", make_save_path=False)
 
     # flatten file list if nested
     if isinstance(file_list[0], list):

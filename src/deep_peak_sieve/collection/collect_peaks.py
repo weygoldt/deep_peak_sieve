@@ -428,6 +428,9 @@ def main(
     n_resamples: Annotated[
         int, typer.Option("--n_resamples", "-nr", help="Number of resamples.")
     ] = 512,
+    overwrite: Annotated[
+        bool, typer.Option("--overwrite", "-o", help="Overwrite existing files.")
+    ] = False,
 ):
     """
     Main function to orchestrate:
@@ -439,12 +442,14 @@ def main(
     6) Dataset saving
     """
 
-    savepath = (
-        None  # Maybe for later when we want to save the extracted peaks somewhere else
-    )
     configure_logging(verbosity=verbose)
     file_list, save_list = load_raw_data(path=datapath, filetype=filetype)
     for data, save_path in zip(file_list, save_list):
+        # Skip if file already exists and overwrite is not set
+        if save_path.with_suffix(".npz").exists() and not overwrite:
+            log.info(f"File {save_path} already exists, skipping.")
+            continue
+
         data = AudioLoader(data)
         process_file(
             data,

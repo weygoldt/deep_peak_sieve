@@ -160,11 +160,27 @@ def main(
                 print(original_path)
             raw_file = AudioLoader(str(original_path))
             peak_file = np.load(data_path)
-            labels = np.full(peak_file["peaks"].shape[0], -1, dtype=int)
+            if "labels" not in peak_file.files:
+                log.info("No labels found in the peak file.")
+                log.info("Creating new labels array.")
+                labels = np.full(peak_file["peaks"].shape[0], -1, dtype=int)
+            else:
+                log.info("Labels found in the peak file.")
+                log.info("Using existing labels array.")
+                labels = peak_file["labels"]
 
             finished = False
             index = 0
             while not finished:
+                # Check if the index is already labeled
+                if labels[sample_indices[index]] != -1:
+                    log.info(f"Sample {index} already labeled.")
+                    index += 1
+                    if index >= len(sample_indices):
+                        log.info("Reached the end of the samples for this file.")
+                        finished = True
+                    continue
+
                 # Plot the peaks
                 key = plot_peaks(
                     index=index,
