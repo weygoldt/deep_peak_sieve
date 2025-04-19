@@ -146,6 +146,8 @@ classify_peaks /path/to/dataset_peaks -vvv
 
 ## TODO ✅
 
+- [ ] Add garbage collection to `collect_peaks.py`, when running for days the ram usage increases for some reason
+- [ ] Implement training on all labeled samples, not just the ones present in the labels.json file
 - [ ] Implement active learnign. Currently, we just label -> train -> classify. For that, checkout python package [baal](https://github.com/baal-org/baal?tab=readme-ov-file)
 - [ ] Implement the latent space sampling strategy, currently we just do stratified random sampling.
 - [ ] Generalize to mono- and polyphasic peaks  
