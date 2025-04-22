@@ -7,7 +7,7 @@ from pathlib import Path
 import orjson
 from rich.prompt import Confirm
 
-from deep_peak_sieve.utils.loggers import get_logger, configure_logging
+from deep_peak_sieve.utils.loggers import get_logger, configure_logging, get_progress
 from deep_peak_sieve.utils.datasets import get_file_list
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
@@ -43,10 +43,15 @@ class StratifiedRandomSampler(BaseSampler):
     def sample(self) -> list:
         # Check how many peaks in each file
         num_samples_per_file = []
-        for file in self.files:
-            data = np.load(file)
-            key = list(data.keys())[0]
-            num_samples_per_file.append(len(data[key]))
+        with get_progress() as pbar:
+            task = pbar.add_task(
+                "Collecting number of samples per file", total=len(self.files)
+            )
+            for file in self.files:
+                data = np.load(file)
+                key = list(data.keys())[0]
+                num_samples_per_file.append(len(data[key]))
+                pbar.update(task, advance=1)
 
         num_samples_per_file = np.array(num_samples_per_file)
 
@@ -63,11 +68,14 @@ class StratifiedRandomSampler(BaseSampler):
         ).astype(int)
 
         sample_indices = []
-        for i in range(len(self.files)):
-            num_samples = num_samples_per_file[i]
-            num_samples_to_sample = target_samples_per_file[i]
-            indices = np.random.randint(0, num_samples, num_samples_to_sample)
-            sample_indices.append(indices)
+        with get_progress() as pbar:
+            task = pbar.add_task("Sampling peaks from each file", total=len(self.files))
+            for i in range(len(self.files)):
+                num_samples = num_samples_per_file[i]
+                num_samples_to_sample = target_samples_per_file[i]
+                indices = np.random.randint(0, num_samples, num_samples_to_sample)
+                sample_indices.append(indices)
+                pbar.update(task, advance=1)
 
         return sample_indices
 
