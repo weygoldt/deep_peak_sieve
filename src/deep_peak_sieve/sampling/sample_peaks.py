@@ -97,7 +97,11 @@ def main(
     if isinstance(data[0], list):
         data = [item for sublist in data for item in sublist]
 
+    log.info(f"Found {len(data)} files in the dataset.")
+
     sampler = StratifiedRandomSampler(data, num_samples=num_samples)
+    log.info(f"Sampling {num_samples} peaks from {len(data)} files.")
+
     sample_indices = sampler.sample()
 
     savepath = None
