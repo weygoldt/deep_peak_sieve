@@ -1,3 +1,4 @@
+import gc
 from typing_extensions import Annotated
 from typing import Optional
 from pathlib import Path
@@ -391,6 +392,7 @@ def process_file(
         dataset["rate"] = data.rate
 
         save_numpy(dataset, save_path)
+        gc.collect()
 
 
 @app.command()

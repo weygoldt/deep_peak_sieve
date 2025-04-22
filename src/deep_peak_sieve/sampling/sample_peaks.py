@@ -5,6 +5,7 @@ import numpy as np
 import typer
 from pathlib import Path
 import orjson
+from rich.prompt import Confirm
 
 from deep_peak_sieve.utils.loggers import get_logger, configure_logging
 from deep_peak_sieve.utils.datasets import get_file_list
@@ -74,8 +75,20 @@ class StratifiedRandomSampler(BaseSampler):
 @app.command()
 def main(
     path: Path = typer.Argument(..., help="Path to the dataset"),
-    num_samples: Annotated[int, typer.Option("--num_samples", "-n")] = 10,
-    verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
+    num_samples: Annotated[
+        int, typer.Option("--num_samples", "-n", help="Number of total samples to draw")
+    ] = 100,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            "-f",
+            help="Force creating the samples.json file, overwriting existing files",
+        ),
+    ] = False,
+    verbose: Annotated[
+        int, typer.Option("--verbose", "-v", count=True, help="Verbosity level")
+    ] = 0,
 ):
     configure_logging(verbose)
     data, _, dtype = get_file_list(path=path, filetype="npz", make_save_path=False)
@@ -94,6 +107,7 @@ def main(
         savepath = path.parent / (path.stem + "_samples")
     else:
         raise ValueError(f"Unknown dataset type: {dtype}")
+    savepath = savepath.with_suffix(".json")
 
     sample_indices_index = [
         x for x in range(len(sample_indices)) if len(sample_indices[x]) > 0
@@ -108,10 +122,23 @@ def main(
         "files": data,
     }
 
-    # Save the sample indices to a JSON file
-    with open(savepath.with_suffix(".json"), "w") as f:
-        f.write(
-            orjson.dumps(json_data, option=orjson.OPT_SERIALIZE_NUMPY).decode("utf-8")
+    if savepath.exists() and not force:
+        log.info("Sample file already exists!")
+        overwrite = Confirm.ask(
+            "Do you want to overwrite the existing file?",
+            default=False,
         )
+    else:
+        overwrite = True
 
-    log.info(f"Saved sample indices to {savepath.with_suffix('.json')}")
+    # Save the sample indices to a JSON file
+    if overwrite:
+        with open(savepath, "w") as f:
+            f.write(
+                orjson.dumps(json_data, option=orjson.OPT_SERIALIZE_NUMPY).decode(
+                    "utf-8"
+                )
+            )
+        log.info(f"Saved sample indices to {savepath.with_suffix('.json')}")
+    else:
+        log.info("Not overwriting the existing file.")

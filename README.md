@@ -146,7 +146,6 @@ classify_peaks /path/to/dataset_peaks -vvv
 
 ## TODO ✅
 
-- [ ] Add garbage collection to `collect_peaks.py`, when running for days the ram usage increases for some reason
 - [ ] Implement training on all labeled samples, not just the ones present in the labels.json file
 - [ ] Implement active learnign. Currently, we just label -> train -> classify. For that, checkout python package [baal](https://github.com/baal-org/baal?tab=readme-ov-file)
 - [ ] Implement the latent space sampling strategy, currently we just do stratified random sampling.
@@ -155,6 +154,9 @@ classify_peaks /path/to/dataset_peaks -vvv
 
 ## DONE 🎉
 
+- [x] Add garbage collection to `collect_peaks.py`, when running for days the ram usage increases for some reason
+- [x] Add user input to the sampler to prompt whether to overwrite existing samples file
+- [x] Add quit option to the labeler GUI to allow for safe quitting
 - [x] Implement incremental labeling: The labeler should check if there is already a label for the present sample and skip it.
 - [x] Implement incremental peak detection: When detecting on a large dataset and an error occurs, it should not start completely from scratch again.
 - [x] Make smoothing and resampling configurable via CLI
