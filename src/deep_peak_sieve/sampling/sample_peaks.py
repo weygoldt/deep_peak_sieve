@@ -6,6 +6,7 @@ import typer
 from pathlib import Path
 import orjson
 from rich.prompt import Confirm
+from humanize.number import intword
 
 from deep_peak_sieve.utils.loggers import get_logger, configure_logging, get_progress
 from deep_peak_sieve.utils.datasets import get_file_list
@@ -54,6 +55,9 @@ class StratifiedRandomSampler(BaseSampler):
                 pbar.update(task, advance=1)
 
         num_samples_per_file = np.array(num_samples_per_file)
+        log.info(
+            f"Found {len(num_samples_per_file)} files with total of {intword(np.sum(num_samples_per_file))} peaks."
+        )
 
         # Check if the total number of peaks fits the requested number of samples
         if np.sum(num_samples_per_file) < self.num_samples:
