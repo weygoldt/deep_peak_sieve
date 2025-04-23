@@ -146,6 +146,11 @@ classify_peaks /path/to/dataset_peaks -vvv
 
 ## TODO ✅
 
+- [ ] We need a dashboard to explore signal to tune peak detection parameters: 
+   - Should support peak detection parameters and filtering parameters (savgol, bandpass, etc.)
+   - Sliders to tune parameters
+   - Output should be written to a config file that is then used by collect_peaks
+- [ ] Implement min/max peak halfwidth
 - [ ] Implement training on all labeled samples, not just the ones present in the labels.json file
 - [ ] Implement active learnign. Currently, we just label -> train -> classify. For that, checkout python package [baal](https://github.com/baal-org/baal?tab=readme-ov-file)
 - [ ] Implement the latent space sampling strategy, currently we just do stratified random sampling.
