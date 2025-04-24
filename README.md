@@ -1,6 +1,7 @@
-# Deep Peak Sieve
+# ThunderPulse
 
-**Deep Peak Sieve** is a peak detector for 1D signals (on steroids 💊).
+**ThunderPulse** is a toolbox to work with peaks or pulses of different
+emitters that change position in multichannel biological signals.
 
 ---
 
@@ -146,7 +147,7 @@ classify_peaks /path/to/dataset_peaks -vvv
 
 ## TODO ✅
 
-- [ ] We need a dashboard to explore signal to tune peak detection parameters: 
+- [ ] We need a dashboard (or similar) to explore signal to tune peak detection parameters: 
    - Should support peak detection parameters and filtering parameters (savgol, bandpass, etc.)
    - Sliders to tune parameters
    - Output should be written to a config file that is then used by collect_peaks
