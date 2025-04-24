@@ -46,6 +46,7 @@ label_peaks = "thunderpulse.labeling.label_peaks:app"
 explore = "thunderpulse.exploration:app"
 train_classifier = "thunderpulse.classification.train_classifier:app"
 classify_peaks = "thunderpulse.classification.classify_peaks:app"
+gui = "thunderpulse.app:main"
 
 
 [tool.ruff]
