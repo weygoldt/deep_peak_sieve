@@ -1,3 +1,8 @@
+# direnv
+.envrc
+# pyenv
+.python-version
+## Directories to ignore 
 testdata/
 lightning_logs/
 checkpoints/

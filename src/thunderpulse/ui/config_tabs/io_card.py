@@ -1,0 +1,58 @@
+import dash_bootstrap_components as dbc
+from dash import html
+
+
+def create_io_card() -> dbc.Card:
+    return dbc.Card(
+        dbc.CardBody(
+            [
+                html.P("Data Folder", className="card-text"),
+                dbc.Input(
+                    type="text",
+                    placeholder="Please put in your datapath",
+                    id="datapath",
+                    persistence=True,
+                    persistence_type="local",
+                    className="card-text",
+                ),
+                html.Br(),
+                html.P("Save Path", className="card-text"),
+                dbc.Input(
+                    type="text",
+                    placeholder="Please put in your save path",
+                    id="savepath",
+                    persistence=True,
+                    persistence_type="local",
+                    className="card-text",
+                ),
+                html.Br(),
+                html.P("Layout of Probe/Grid", className="card-text"),
+                dbc.Input(
+                    type="text",
+                    placeholder="Please put in your path to the probe/grid layout",
+                    id="probepath",
+                    persistence=True,
+                    persistence_type="local",
+                    className="card-text",
+                ),
+                html.Br(),
+                html.Div(
+                    [
+                        dbc.Button(
+                            "Load the data",
+                            color="info",
+                            id="bt_load_data",
+                            n_clicks=0,
+                        ),
+                        dbc.Button(
+                            "Overwrite Nix File",
+                            color="info",
+                            id="bt_overwrite_nix_file",
+                            n_clicks=0,
+                        ),
+                    ],
+                    className="d-grid gap-2",
+                ),
+            ]
+        )
+    )
