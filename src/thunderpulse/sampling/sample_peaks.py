@@ -8,8 +8,8 @@ import orjson
 from rich.prompt import Confirm
 from humanize.number import intword
 
-from deep_peak_sieve.utils.loggers import get_logger, configure_logging, get_progress
-from deep_peak_sieve.utils.datasets import get_file_list
+from thunderpulse.utils.loggers import get_logger, configure_logging, get_progress
+from thunderpulse.utils.datasets import get_file_list
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
 log = get_logger(__name__)

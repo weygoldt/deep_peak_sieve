@@ -5,7 +5,7 @@ from pathlib import Path
 import typer
 from audioio.audioloader import AudioLoader
 
-from deep_peak_sieve.utils.datasets import Dict2Dataclass
+from thunderpulse.utils.datasets import Dict2Dataclass
 
 app = typer.Typer()
 

@@ -19,7 +19,7 @@ from sklearn.metrics import (
     average_precision_score,
 )
 
-from deep_peak_sieve.utils.loggers import get_logger
+from thunderpulse.utils.loggers import get_logger
 
 log = get_logger(__name__)
 

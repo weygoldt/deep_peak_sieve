@@ -1,3 +1,10 @@
+# Dashboard Merge TODO:
+
+- [ ] Build testdata set with spikesorting data and eel/pulsefish data
+- [ ] Build GUI elements to save configs to `scipy.signal.find_peaks`
+- [ ] Build data loading classes to unify nix data and wav files
+
+
 # ThunderPulse
 
 **ThunderPulse** is a toolbox to work with peaks or pulses of different
@@ -7,15 +14,17 @@ emitters that change position in multichannel biological signals.
 
 ## Motivation 💡
 
-When working with biological signals where peaks are the main feature of
-interest, we are often faced with the tradeoff between a high false positive
-rate (detecting noise as peaks) and a high false negative rate (missing true
-peaks but detecting less noise). The lower we set a threshold, the more true
-peaks we get but also the more noise we detect. This is especially problematic
-when the signal-to-noise ratio is low, as it can lead to a large number of
-false positives and make it difficult to identify true peaks. To fix this, we
-need to be able to distinguish between true peaks and noise in the peaks we
-detect.
+
+
+<!-- When working with biological signals where peaks are the main feature of -->
+<!-- interest, we are often faced with the tradeoff between a high false positive -->
+<!-- rate (detecting noise as peaks) and a high false negative rate (missing true -->
+<!-- peaks but detecting less noise). The lower we set a threshold, the more true -->
+<!-- peaks we get but also the more noise we detect. This is especially problematic -->
+<!-- when the signal-to-noise ratio is low, as it can lead to a large number of -->
+<!-- false positives and make it difficult to identify true peaks. To fix this, we -->
+<!-- need to be able to distinguish between true peaks and noise in the peaks we -->
+<!-- detect. -->
 
 ## Overview 🔎
 

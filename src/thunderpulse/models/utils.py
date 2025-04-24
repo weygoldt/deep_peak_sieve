@@ -8,7 +8,7 @@ from sklearn.preprocessing import StandardScaler
 from umap import UMAP
 from typing import Optional, Union
 
-from deep_peak_sieve.models.base import BaseVAE
+from thunderpulse.models.base import BaseVAE
 
 
 def generate_synthetic_peaks(
