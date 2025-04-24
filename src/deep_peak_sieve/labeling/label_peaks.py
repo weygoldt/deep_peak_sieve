@@ -168,117 +168,119 @@ def main(
 
         # TODO: Make original data extension flexible (.wav)
 
-        escape = False
-        for sample_indices, data_path in zip(data["sample_indices"], data["files"]):
-            log.info(f"Moving to new file {data_path}")
-            data_path = Path(data_path)
+    escape = False
+    sample_counter = 0
+    n_total_samples = [len(sample_indices) for sample_indices in data["sample_indices"]]
+    n_total_samples = sum(n_total_samples)
+    for sample_indices, data_path in zip(data["sample_indices"], data["files"]):
+        log.info(f"Moving to new file {data_path}")
+        data_path = Path(data_path)
 
-            original_path = None
-            if dtype == "dir":
-                original_subdir = data_path.parent.stem.replace("_peaks", "")
-                original_file = data_path.stem.replace("_peaks", "")
-                original_path = (
-                    data_path.parent.parent / original_subdir / f"{original_file}.wav"
-                )
-                print(original_path)
-            elif dtype == "subdir":
-                original_dir = data_path.parent.parent.stem.replace("_peaks", "")
-                original_subdir = data_path.parent.stem
-                original_file = data_path.stem.replace("_peaks", "")
-                original_path = (
-                    data_path.parent.parent.parent
-                    / original_dir
-                    / original_subdir
-                    / f"{original_file}.wav"
-                )
-                print(original_path)
-            raw_file = AudioLoader(str(original_path))
-            peak_file = np.load(data_path)
-            if "labels" not in peak_file.files:
-                log.info("No labels found in the peak file.")
-                log.info("Creating new labels array.")
-                labels = np.full(peak_file["peaks"].shape[0], -1, dtype=int)
-            else:
-                log.info("Labels found in the peak file.")
-                log.info("Using existing labels array.")
-                labels = peak_file["labels"]
+        original_path = None
+        if dtype == "dir":
+            original_subdir = data_path.parent.stem.replace("_peaks", "")
+            original_file = data_path.stem.replace("_peaks", "")
+            original_path = (
+                data_path.parent.parent / original_subdir / f"{original_file}.wav"
+            )
+        elif dtype == "subdir":
+            original_dir = data_path.parent.parent.stem.replace("_peaks", "")
+            original_subdir = data_path.parent.stem
+            original_file = data_path.stem.replace("_peaks", "")
+            original_path = (
+                data_path.parent.parent.parent
+                / original_dir
+                / original_subdir
+                / f"{original_file}.wav"
+            )
+            print(original_path)
+        raw_file = AudioLoader(str(original_path))
+        peak_file = np.load(data_path)
+        if "labels" not in peak_file.files:
+            log.info("No labels found in the peak file.")
+            log.info("Creating new labels array.")
+            labels = np.full(peak_file["peaks"].shape[0], -1, dtype=int)
+        else:
+            log.info("Labels found in the peak file.")
+            log.info("Using existing labels array.")
+            labels = peak_file["labels"]
 
-            finished = False
-            index = 0
-            while not finished:
-                # Check if the index is already labeled
-                if labels[sample_indices[index]] != -1:
-                    log.info(f"Sample {index} already labeled.")
-                    index += 1
-                    if index >= len(sample_indices):
-                        log.info("Reached the end of the samples for this file.")
-                        finished = True
-                    continue
-
-                # Plot the peaks
-                key = plot_peaks(
-                    index=index,
-                    sample_indices=sample_indices,
-                    raw_file=raw_file,
-                    peak_file=peak_file,
-                )
-
-                log.debug(f"Key pressed: {key}")
-                if key == "escape":
-                    log.info("Exiting labeling process.")
-                    finished = True
-                    escape = True
-                    break
-
-                label = -1
-                if key == "c":
-                    index = index - 1
-                    if index >= 0:
-                        log.info(f"Correcting label for sample {index}")
-                        key = plot_peaks(
-                            index=index,
-                            sample_indices=sample_indices,
-                            raw_file=raw_file,
-                            peak_file=peak_file,
-                        )
-                        if key == "t":
-                            label = 1
-                        elif key == "f":
-                            label = 0
-                        else:
-                            raise ValueError(
-                                f"Invalid key pressed for correction: {key}"
-                            )
-                    else:
-                        index = 0
-                        log.info("No previous sample to correct.")
-                        continue
-                elif key == "t":
-                    label = 1
-                elif key == "f":
-                    label = 0
-                else:
-                    raise ValueError(
-                        f"Invalid key pressed: {key}. Expected 't', 'f', or 'c'."
-                    )
-
-                # Save the label
-                labels[sample_indices[index]] = label
-
+        finished = False
+        index = 0
+        while not finished:
+            sample_counter += 1
+            log.info(f"Labeling sample {sample_counter} of {n_total_samples}")
+            # Check if the index is already labeled
+            if labels[sample_indices[index]] != -1:
+                log.info(f"Sample {index} already labeled.")
                 index += 1
                 if index >= len(sample_indices):
                     log.info("Reached the end of the samples for this file.")
                     finished = True
+                continue
 
-            # Save the labels
-            new_peak_file = {
-                "labels": labels,
-            }
-            for key, value in peak_file.items():
-                if key not in new_peak_file:
-                    new_peak_file[key] = value
+            # Plot the peaks
+            key = plot_peaks(
+                index=index,
+                sample_indices=sample_indices,
+                raw_file=raw_file,
+                peak_file=peak_file,
+            )
 
-            np.savez(data_path, **new_peak_file)
-            log.debug(f"Labels added to extracted peask at {data_path}.")
-            if escape:
+            log.debug(f"Key pressed: {key}")
+            if key == "escape":
+                log.info("Exiting labeling process.")
+                finished = True
+                escape = True
                 break
+
+            label = -1
+            if key == "c":
+                index = index - 1
+                if index >= 0:
+                    log.info(f"Correcting label for sample {index}")
+                    key = plot_peaks(
+                        index=index,
+                        sample_indices=sample_indices,
+                        raw_file=raw_file,
+                        peak_file=peak_file,
+                    )
+                    if key == "t":
+                        label = 1
+                    elif key == "f":
+                        label = 0
+                    else:
+                        raise ValueError(f"Invalid key pressed for correction: {key}")
+                else:
+                    index = 0
+                    log.info("No previous sample to correct.")
+                    continue
+            elif key == "t":
+                label = 1
+            elif key == "f":
+                label = 0
+            else:
+                raise ValueError(
+                    f"Invalid key pressed: {key}. Expected 't', 'f', or 'c'."
+                )
+
+            # Save the label
+            labels[sample_indices[index]] = label
+
+            index += 1
+            if index >= len(sample_indices):
+                log.info("Reached the end of the samples for this file.")
+                finished = True
+
+        # Save the labels
+        new_peak_file = {
+            "labels": labels,
+        }
+        for key, value in peak_file.items():
+            if key not in new_peak_file:
+                new_peak_file[key] = value
+
+        np.savez(data_path, **new_peak_file)
+        log.debug(f"Labels added to extracted peask at {data_path}.")
+        if escape:
+            break
