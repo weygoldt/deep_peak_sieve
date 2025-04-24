@@ -1,12 +1,10 @@
-import numpy as np
-import torch
 import matplotlib.pyplot as plt
-from typing import Tuple
+import numpy as np
 import seaborn as sns
+import torch
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from umap import UMAP
-from typing import Optional, Union
 
 from thunderpulse.models.base import BaseVAE
 
@@ -16,7 +14,7 @@ def generate_synthetic_peaks(
     length: int = 1024,
     bullshit_frac: float = 0.2,
     noise_std: float = 1.0,
-) -> Tuple[torch.Tensor, np.ndarray]:
+) -> tuple[torch.Tensor, np.ndarray]:
     """
     Generate synthetic 1D signals of shape [num_samples, 1, length].
     A fraction of these signals are "bullshit" random noise, and
@@ -51,7 +49,6 @@ def generate_synthetic_peaks(
     - Pulse width is between 1% to 5% of the signal length.
     - Noise signals are sampled from N(0, noise_std^2).
     """
-
     data = torch.zeros(num_samples, 1, length)
     labels = np.zeros(num_samples, dtype=int)
     xs = np.arange(length)
@@ -117,7 +114,9 @@ def plot_signals(data: torch.Tensor, labels: np.ndarray, num_samples: int = 5):
     """
     n_classes = len(np.unique(labels))
     colors = sns.color_palette("deep", n_classes)
-    fig, axs = plt.subplots(2, n_classes, constrained_layout=True, figsize=(10, 5))
+    fig, axs = plt.subplots(
+        2, n_classes, constrained_layout=True, figsize=(10, 5)
+    )
     axs = axs.flatten()
     for i in range(num_samples):
         ax = axs[labels[i]]
@@ -135,9 +134,13 @@ def plot_signals(data: torch.Tensor, labels: np.ndarray, num_samples: int = 5):
     umap = UMAP(n_components=2)
     data_umap = umap.fit_transform(np_data)
 
-    axs[2].scatter(data_pca[:, 0], data_pca[:, 1], c=labels, cmap="viridis", s=5)
+    axs[2].scatter(
+        data_pca[:, 0], data_pca[:, 1], c=labels, cmap="viridis", s=5
+    )
     axs[2].set_title("PCA")
-    axs[3].scatter(data_umap[:, 0], data_umap[:, 1], c=labels, cmap="viridis", s=5)
+    axs[3].scatter(
+        data_umap[:, 0], data_umap[:, 1], c=labels, cmap="viridis", s=5
+    )
     axs[3].set_title("UMAP")
     plt.show()
 
@@ -160,7 +163,7 @@ if __name__ == "__main__":
 def visualize_latent_space(
     vae_model: BaseVAE,
     data: torch.Tensor,
-    labels: Optional[Union[np.ndarray, torch.Tensor]] = None,
+    labels: np.ndarray | torch.Tensor | None = None,
     method: str = "pca",
     use_mean: bool = True,
     n_samples: int = 1000,
@@ -237,7 +240,9 @@ def visualize_latent_space(
         if isinstance(labels, torch.Tensor):
             labels = labels.cpu().numpy()
         labels = labels[: len(coords_2d)]  # in case we truncated data
-        sc = ax.scatter(coords_2d[:, 0], coords_2d[:, 1], c=labels, s=10, alpha=0.7)
+        sc = ax.scatter(
+            coords_2d[:, 0], coords_2d[:, 1], c=labels, s=10, alpha=0.7
+        )
     else:
         ax.scatter(coords_2d[:, 0], coords_2d[:, 1], s=10, alpha=0.7)
 
@@ -248,7 +253,10 @@ def visualize_latent_space(
 
 
 def plot_reconstructions(
-    vae_model: BaseVAE, data: torch.Tensor, n_samples: int = 10, random: bool = True
+    vae_model: BaseVAE,
+    data: torch.Tensor,
+    n_samples: int = 10,
+    random: bool = True,
 ) -> None:
     """
     Plot original vs reconstructed samples from a trained BaseVAE model.

@@ -1,7 +1,8 @@
+from pathlib import Path
 from typing import Annotated
+
 import matplotlib.pyplot as plt
 import numpy as np
-from pathlib import Path
 import typer
 from audioio.audioloader import AudioLoader
 
@@ -21,7 +22,9 @@ def main(
     for file in np_files:
         original_subdir = file.parent.stem.replace("_peaks", "")
         original_file = file.stem.replace("_peaks", "")
-        original_path = file.parent.parent / original_subdir / f"{original_file}.wav"
+        original_path = (
+            file.parent.parent / original_subdir / f"{original_file}.wav"
+        )
         raw_file = AudioLoader(str(original_path))
         peak_file = Dict2Dataclass(np.load(file))
 

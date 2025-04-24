@@ -1,14 +1,15 @@
-import matplotlib.pyplot as plt
-from typing import Any, Tuple
 from abc import ABC, abstractmethod
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.utils.data import DataLoader, TensorDataset
-from torch.distributions import LowRankMultivariateNormal
+from typing import Any
+
 import lightning as L
-from lightning.pytorch.callbacks import StochasticWeightAveraging
+import matplotlib.pyplot as plt
 import numpy as np
+import torch
+import torch.nn.functional as F
+from lightning.pytorch.callbacks import StochasticWeightAveraging
+from torch import nn
+from torch.distributions import LowRankMultivariateNormal
+from torch.utils.data import DataLoader, TensorDataset
 from torchinfo import summary
 
 
@@ -58,7 +59,7 @@ class DiagonalGaussian(BaseLatentDistribution):
         self.fc_mu = nn.Linear(hidden_dim, latent_dim)
         self.fc_logvar = nn.Linear(hidden_dim, latent_dim)
 
-    def forward(self, x) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x) -> tuple[torch.Tensor, torch.Tensor]:
         """
         x: [batch_size, hidden_dim]
         returns (mu, logvar)
@@ -104,7 +105,7 @@ class LowRankGaussian(BaseLatentDistribution):
         self.fc_u = nn.Linear(hidden_dim, latent_dim * rank)
         self.fc_d = nn.Linear(hidden_dim, latent_dim)
 
-    def forward(self, x) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, x) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         x: [batch_size, hidden_dim]
         returns (mu, u, d)
@@ -140,7 +141,6 @@ class LowRankGaussian(BaseLatentDistribution):
           - u:  [N, latent_dim, rank]
           - d:  [N, latent_dim]
         """
-
         (mu, u, diag_d) = dist_params
         batch_size, latent_dim = mu.shape
         rank = self.rank
@@ -165,7 +165,9 @@ class LowRankGaussian(BaseLatentDistribution):
             logdet_diag = torch.log(d_i).sum()  # sum_j log d_{i,j}
 
             # Build M = D^(-1/2)*U => shape [latent_dim, rank]
-            M = u_i / torch.sqrt(d_i.unsqueeze(1))  # broadcast divide each column
+            M = u_i / torch.sqrt(
+                d_i.unsqueeze(1)
+            )  # broadcast divide each column
 
             # M^T M is [rank, rank]
             MtM = M.transpose(0, 1) @ M  # or torch.matmul(M.t(), M)
@@ -193,8 +195,8 @@ class Encoder(nn.Module):
     """
     Convolutional 1D Encoder with configurable layers.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     input_dim : int
         Length of the input signal.
     base_channels : int
@@ -206,7 +208,9 @@ class Encoder(nn.Module):
         This output is fed into the LatentDistribution.
     """
 
-    def __init__(self, input_dim, base_channels, num_downsamples, hidden_dim=128):
+    def __init__(
+        self, input_dim, base_channels, num_downsamples, hidden_dim=128
+    ):
         super().__init__()
 
         self.input_dim = input_dim
@@ -249,7 +253,9 @@ class Encoder(nn.Module):
         Returns a hidden representation of size [batch_size, hidden_dim].
         """
         x = self.conv_encoder(x)  # [N, final_channels, current_dim]
-        x = x.view(x.size(0), -1)  # flatten to [N, final_channels * current_dim]
+        x = x.view(
+            x.size(0), -1
+        )  # flatten to [N, final_channels * current_dim]
         x = F.silu(self.fc1(x))  # [N, 512]
         x = F.silu(self.fc2(x))  # [N, 256]
         x = F.silu(self.fc3(x))  # [N, hidden_dim]
@@ -260,8 +266,8 @@ class Decoder(nn.Module):
     """
     Convolutional 1D Decoder with configurable layers.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
     latent_dim : int
     base_channels : int
         Should match the one used in the encoder for symmetrical design.
@@ -296,12 +302,19 @@ class Decoder(nn.Module):
 
         decoder_layers = []
         in_ch = final_channels
-        out_ch = in_ch // 2  # if we doubled channels during encoding, we'll halve now
+        out_ch = (
+            in_ch // 2
+        )  # if we doubled channels during encoding, we'll halve now
 
         for i in range(num_downsamples):
             decoder_layers.append(
                 nn.ConvTranspose1d(
-                    in_ch, out_ch, kernel_size=3, stride=2, padding=1, output_padding=1
+                    in_ch,
+                    out_ch,
+                    kernel_size=3,
+                    stride=2,
+                    padding=1,
+                    output_padding=1,
                 )
             )
             decoder_layers.append(nn.ReLU())
@@ -310,7 +323,9 @@ class Decoder(nn.Module):
             out_ch = max(out_ch // 2, 1)  # avoid going below 1
 
         self.conv_decoder = nn.Sequential(*decoder_layers)
-        self.final_conv = nn.Conv1d(in_ch, 1, kernel_size=3, stride=1, padding=1)
+        self.final_conv = nn.Conv1d(
+            in_ch, 1, kernel_size=3, stride=1, padding=1
+        )
 
     def forward(self, z):
         x = F.silu(self.fc1(z))
@@ -332,10 +347,9 @@ def build_latent_distribution(dist_type, latent_dim, hidden_dim=128, rank=2):
     """
     if dist_type == "diagonal":
         return DiagonalGaussian(latent_dim, hidden_dim=hidden_dim)
-    elif dist_type == "lowrank":
+    if dist_type == "lowrank":
         return LowRankGaussian(latent_dim, hidden_dim=hidden_dim, rank=rank)
-    else:
-        raise ValueError(f"Unsupported distribution type: {dist_type}")
+    raise ValueError(f"Unsupported distribution type: {dist_type}")
 
 
 class VAE(nn.Module):
@@ -464,12 +478,13 @@ class LitVAE(L.LightningModule):
     def _compute_recon_loss(self, x_recon, x):
         if self.recon_loss_type == "mse":
             return F.mse_loss(x_recon, x, reduction="mean")
-        elif self.recon_loss_type == "bce":
+        if self.recon_loss_type == "bce":
             # For BCE, you'd typically sigmoid the output or ensure it's in [0,1]
             # Also flatten or keep shape consistent.
-            return F.binary_cross_entropy_with_logits(x_recon, x, reduction="mean")
-        else:
-            raise ValueError(f"Unknown recon loss type: {self.recon_loss_type}")
+            return F.binary_cross_entropy_with_logits(
+                x_recon, x, reduction="mean"
+            )
+        raise ValueError(f"Unknown recon loss type: {self.recon_loss_type}")
 
     def training_step(self, batch, batch_idx):
         (x,) = batch
@@ -504,7 +519,9 @@ class LitVAE(L.LightningModule):
         return torch.optim.Adam(self.parameters(), lr=self.lr)
 
 
-def generate_synthetic_pulses(num_samples=1000, length=1024, bullshit_frac=0.2):
+def generate_synthetic_pulses(
+    num_samples=1000, length=1024, bullshit_frac=0.2
+):
     """
     Generate synthetic 1D signals [num_samples, 1, length]
     Each signal contains a simple "pulse" of random amplitude/width
@@ -546,7 +563,9 @@ def generate_synthetic_pulses(num_samples=1000, length=1024, bullshit_frac=0.2):
     return data, labels
 
 
-def visualize_latent_space(vae_model, data, labels, num_points=500, method="pca"):
+def visualize_latent_space(
+    vae_model, data, labels, num_points=500, method="pca"
+):
     """
     Pass a subset of `data` through the encoder, get latent codes, then
     use PCA or UMAP to reduce to 2D for visualization.
@@ -656,7 +675,9 @@ if __name__ == "__main__":
     )
     summary(vae_model, input_size=(batch_size, 1, input_dim))
 
-    lightning_module = LitVAE(vae_model, learning_rate=1e-3, recon_loss_type="mse")
+    lightning_module = LitVAE(
+        vae_model, learning_rate=1e-3, recon_loss_type="mse"
+    )
     trainer = L.Trainer(
         max_epochs=500,
         callbacks=[

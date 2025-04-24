@@ -23,3 +23,51 @@ label_peaks = "thunderpulse.labeling.label_peaks:app"
 explore = "thunderpulse.exploration:app"
 train_classifier = "thunderpulse.classification.train_classifier:app"
 classify_peaks = "thunderpulse.classification.classify_peaks:app"
+
+
+[tool.ruff]
+line-length = 79
+
+[tool.ruff.lint]
+select = [
+    "W", # pycodestyle
+    "E", # pycodestyle
+    "F", # Pyflakes
+    "UP", # pyupgrade
+    "B", # flake8-bugbear
+    "SIM", # flake8-simplify
+    "ANN", # flake8-annotations
+    "A", # flake8-builtins
+    "COM", # flake8-commas
+    "C4", # flake8-comprehensions
+    "EM", # flake8-error-msg
+    "EXE", # flake8-executable
+    "ICN", # flake8-import-conventions
+    "PT", # flake8-pytest-style
+    "Q", # flake8-quotes
+    "RET", # flake8-return
+    "SIM", # flake8-simplify
+    "ARG", # flake8-unused-arguments
+    "PTH", # flake8-use-pathlib
+    "PD", # pandas-vet
+    "PL", # pylint
+    "TRY", # tryceratops
+    "NPY", # numpy-specific
+    "I", # isort
+    "C90", # complexity (McCabe)
+    "N", # pep8-naming
+    "D", # pydocstyle
+]
+ignore = [
+    "COM812", # missing trailing comma
+    "TD002", # missing todo author
+    "TD003", # missing todo link
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"

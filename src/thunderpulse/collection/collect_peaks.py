@@ -1,19 +1,23 @@
 import gc
-from typing_extensions import Annotated
-from typing import Optional
-from pathlib import Path
-import numpy as np
-from audioio.audioloader import AudioLoader
-import humanize
 from datetime import timedelta
-import typer
-from scipy.signal import find_peaks, savgol_filter
-from scipy.interpolate import interp1d
-from IPython import embed
+from pathlib import Path
+from typing import Annotated
 
-from thunderpulse.utils.loggers import get_logger, get_progress, configure_logging
+import humanize
+import numpy as np
+import typer
+from audioio.audioloader import AudioLoader
+from IPython import embed
+from scipy.interpolate import interp1d
+from scipy.signal import find_peaks, savgol_filter
+
 from thunderpulse.collection.filters import bandpass_filter
 from thunderpulse.utils.datasets import load_raw_data, save_numpy
+from thunderpulse.utils.loggers import (
+    configure_logging,
+    get_logger,
+    get_progress,
+)
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
 log = get_logger(__name__)
@@ -42,7 +46,9 @@ def initialize_dataset(path: Path):
     return dataset
 
 
-def apply_filter(block: np.ndarray, sample_rate: float, params: dict) -> np.ndarray:
+def apply_filter(
+    block: np.ndarray, sample_rate: float, params: dict
+) -> np.ndarray:
     """
     Apply the specified filtering method to the audio block data.
     """
@@ -55,7 +61,7 @@ def apply_filter(block: np.ndarray, sample_rate: float, params: dict) -> np.ndar
             # params["window_length"],
             # params["polyorder"],
         ).T
-    elif params["mode"] == "bandpass":
+    if params["mode"] == "bandpass":
         log.debug("Applying bandpass filter")
         return bandpass_filter(
             block.T,
@@ -63,11 +69,10 @@ def apply_filter(block: np.ndarray, sample_rate: float, params: dict) -> np.ndar
             highcut=params["highcut"],
             sample_rate=sample_rate,
         ).T
-    elif params["mode"] == "none":
+    if params["mode"] == "none":
         log.debug("No filtering applied")
         return block
-    else:
-        raise ValueError(f"Filtering mode {params['mode']} not recognized")
+    raise ValueError(f"Filtering mode {params['mode']} not recognized")
 
 
 def detect_peaks(
@@ -116,10 +121,12 @@ def group_peaks(peaks, channels, peak_window):
     # Initialize the first group
     current_group = [peaks[0]]
     current_channels = [channels[0]]
-    for p, c in zip(peaks[1:], channels[1:]):
+    for p, c in zip(peaks[1:], channels[1:], strict=False):
         # Check if the current peak is within the peak_window of the last peak
         # in the current group, and if channel is new
-        if ((p - current_group[-1]) < peak_window) and (c not in current_channels):
+        if ((p - current_group[-1]) < peak_window) and (
+            c not in current_channels
+        ):
             current_group.append(p)
             current_channels.append(c)
         else:
@@ -134,7 +141,9 @@ def group_peaks(peaks, channels, peak_window):
 
     # Check duplicates
     for i in range(len(peak_groups)):
-        unique_channels, counts = np.unique(peak_channels[i], return_counts=True)
+        unique_channels, counts = np.unique(
+            peak_channels[i], return_counts=True
+        )
         if np.any(counts > 1):
             # Detected a peak group that contains the same channel multiple times
             log.warning(
@@ -144,7 +153,9 @@ def group_peaks(peaks, channels, peak_window):
     return peak_groups, peak_channels
 
 
-def filter_peak_groups(grouped_peaks, grouped_channels, min_channels_with_peaks):
+def filter_peak_groups(
+    grouped_peaks, grouped_channels, min_channels_with_peaks
+):
     """
     Discard groups that do not have enough channels with peaks.
     """
@@ -160,13 +171,15 @@ def compute_mean_peak(
     center: float,
     channels: np.ndarray,
     around_peak_window: int,
-) -> Optional[np.ndarray]:
+) -> np.ndarray | None:
     """
     Given a filtered block, a center index, and the channels that had peaks,
     return a normalized mean-peak waveform across those channels.
     """
     indexer = np.arange(
-        center - around_peak_window, center + around_peak_window, dtype=np.int32
+        center - around_peak_window,
+        center + around_peak_window,
+        dtype=np.int32,
     )
     if (np.any(indexer < 0)) or (np.any(indexer >= block_filtered.shape[0])):
         log.warning("Index out of bounds for peak window, skipping peak.")
@@ -189,7 +202,9 @@ def compute_mean_peak(
     peak_snippet -= baselines
 
     # Extract sign of strongest deviation
-    signs = np.array([1 if s[np.argmax(np.abs(s))] > 0 else -1 for s in peak_snippet.T])
+    signs = np.array(
+        [1 if s[np.argmax(np.abs(s))] > 0 else -1 for s in peak_snippet.T]
+    )
 
     # Flip sign according to majority polarity
     # TODO: This does not work sometimes, maybe due to noise? For single peak pulses
@@ -233,7 +248,9 @@ def process_file(
 ):
     data.set_unwrap(thresh=1.5)
     blocksize = int(np.ceil(data.rate * buffersize_s))
-    overlap = blocksize // 10  # Just a bit clearer than int(np.ceil(blocksize // 10))
+    overlap = (
+        blocksize // 10
+    )  # Just a bit clearer than int(np.ceil(blocksize // 10))
 
     # Configuration
     min_peak_distance = int(np.ceil(peak_distance_s * data.rate))
@@ -242,7 +259,9 @@ def process_file(
     polyorder = 3
     filtering_params = dict(
         mode="savgol",
-        window_length=window_length if window_length > polyorder else polyorder + 1,
+        window_length=window_length
+        if window_length > polyorder
+        else polyorder + 1,
         polyorder=3,
     )
 
@@ -279,7 +298,9 @@ def process_file(
                 block = np.expand_dims(block, axis=1)
 
             # Apply filtering
-            block_filtered = apply_filter(block, data.rate, params=filtering_params)
+            block_filtered = apply_filter(
+                block, data.rate, params=filtering_params
+            )
 
             # Detect peaks on each channel
             abs_block_filtered = np.abs(block_filtered)
@@ -292,7 +313,9 @@ def process_file(
 
             # Group them
             grouped_peaks, grouped_channels = group_peaks(
-                peaks_list, channels_list, peak_window=int(min_peak_distance // 2)
+                peaks_list,
+                channels_list,
+                peak_window=int(min_peak_distance // 2),
             )
 
             # Filter out groups that do not meet the threshold
@@ -303,14 +326,16 @@ def process_file(
             # Compute means of each group
             log.info(f"Found a total of {len(grouped_peaks)} peaks")
             if len(grouped_peaks) == 0:
-                log.debug(f"Found 0 peaks. Skipping block {blockiterval} for now.")
+                log.debug(
+                    f"Found 0 peaks. Skipping block {blockiterval} for now."
+                )
                 continue
 
             centers = [int(np.mean(g)) for g in grouped_peaks]
 
             # For each peak group, compute & store waveform
             for peakiterval, (pks, chans, center) in enumerate(
-                zip(grouped_peaks, grouped_channels, centers)
+                zip(grouped_peaks, grouped_channels, centers, strict=False)
             ):
                 chans = np.array(chans)
                 if chans.dtype not in [np.int32, np.int64, np.bool]:
@@ -367,7 +392,10 @@ def process_file(
                     ]
                 )
                 amps = np.array(
-                    [block_filtered[pks, ch][idx] for ch, idx in enumerate(amp_index)]
+                    [
+                        block_filtered[pks, ch][idx]
+                        for ch, idx in enumerate(amp_index)
+                    ]
                 )
 
                 center += blockiterval * (blocksize - overlap)
@@ -400,28 +428,38 @@ def main(
     datapath: Annotated[Path, typer.Argument(help="Path to the dataset.")],
     verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
     filetype: Annotated[
-        str, typer.Option("--filetype", "-f", help="File type to detect peaks on.")
+        str,
+        typer.Option("--filetype", "-f", help="File type to detect peaks on."),
     ] = "wav",
     buffersize_seconds: Annotated[
         int, typer.Option("--buffersize", "-b", help="Buffer size in seconds.")
     ] = 60,
     min_channels_with_peaks: Annotated[
-        int, typer.Option("--min_channels", "-mc", help="Minimum channels with peaks.")
+        int,
+        typer.Option(
+            "--min_channels", "-mc", help="Minimum channels with peaks."
+        ),
     ] = 4,
     smoothing_window_s: Annotated[
         float,
-        typer.Option("--smoothing_window", "-sw", help="Smoothing window in seconds."),
+        typer.Option(
+            "--smoothing_window", "-sw", help="Smoothing window in seconds."
+        ),
     ] = 0.0001,
     peak_distance_s: Annotated[
         float,
         typer.Option(
-            "--peak_distance", "-pd", help="Minimum distance between peaks in seconds."
+            "--peak_distance",
+            "-pd",
+            help="Minimum distance between peaks in seconds.",
         ),
     ] = 0.004,
     peak_height_threshold: Annotated[
         float,
         typer.Option(
-            "--peak_height", "-ph", help="Minimum height of peaks in amplitude."
+            "--peak_height",
+            "-ph",
+            help="Minimum height of peaks in amplitude.",
         ),
     ] = 0.001,
     resample: Annotated[
@@ -431,7 +469,8 @@ def main(
         int, typer.Option("--n_resamples", "-nr", help="Number of resamples.")
     ] = 512,
     overwrite: Annotated[
-        bool, typer.Option("--overwrite", "-o", help="Overwrite existing files.")
+        bool,
+        typer.Option("--overwrite", "-o", help="Overwrite existing files."),
     ] = False,
 ):
     """
@@ -443,10 +482,9 @@ def main(
     5) Waveform extraction
     6) Dataset saving
     """
-
     configure_logging(verbosity=verbose)
     file_list, save_list = load_raw_data(path=datapath, filetype=filetype)
-    for data, save_path in zip(file_list, save_list):
+    for data, save_path in zip(file_list, save_list, strict=False):
         # Skip if file already exists and overwrite is not set
         if save_path.with_suffix(".npz").exists() and not overwrite:
             log.info(f"File {save_path} already exists, skipping.")

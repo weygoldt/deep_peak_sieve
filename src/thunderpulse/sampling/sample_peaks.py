@@ -1,15 +1,19 @@
-from os import makedev
-from typing import Annotated
 from abc import abstractmethod
-import numpy as np
-import typer
 from pathlib import Path
-import orjson
-from rich.prompt import Confirm
-from humanize.number import intword
+from typing import Annotated
 
-from thunderpulse.utils.loggers import get_logger, configure_logging, get_progress
+import numpy as np
+import orjson
+import typer
+from humanize.number import intword
+from rich.prompt import Confirm
+
 from thunderpulse.utils.datasets import get_file_list
+from thunderpulse.utils.loggers import (
+    configure_logging,
+    get_logger,
+    get_progress,
+)
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
 log = get_logger(__name__)
@@ -66,18 +70,24 @@ class StratifiedRandomSampler(BaseSampler):
             )
 
         # Randomly sample peaks from each file to reach the requested number of samples
-        total_frac_per_file = num_samples_per_file / np.sum(num_samples_per_file)
+        total_frac_per_file = num_samples_per_file / np.sum(
+            num_samples_per_file
+        )
         target_samples_per_file = np.round(
             total_frac_per_file * self.num_samples
         ).astype(int)
 
         sample_indices = []
         with get_progress() as pbar:
-            task = pbar.add_task("Sampling peaks from each file", total=len(self.files))
+            task = pbar.add_task(
+                "Sampling peaks from each file", total=len(self.files)
+            )
             for i in range(len(self.files)):
                 num_samples = num_samples_per_file[i]
                 num_samples_to_sample = target_samples_per_file[i]
-                indices = np.random.randint(0, num_samples, num_samples_to_sample)
+                indices = np.random.randint(
+                    0, num_samples, num_samples_to_sample
+                )
                 sample_indices.append(indices)
                 pbar.update(task, advance=1)
 
@@ -88,7 +98,10 @@ class StratifiedRandomSampler(BaseSampler):
 def main(
     path: Path = typer.Argument(..., help="Path to the dataset"),
     num_samples: Annotated[
-        int, typer.Option("--num_samples", "-n", help="Number of total samples to draw")
+        int,
+        typer.Option(
+            "--num_samples", "-n", help="Number of total samples to draw"
+        ),
     ] = 100,
     force: Annotated[
         bool,
@@ -99,11 +112,14 @@ def main(
         ),
     ] = False,
     verbose: Annotated[
-        int, typer.Option("--verbose", "-v", count=True, help="Verbosity level")
+        int,
+        typer.Option("--verbose", "-v", count=True, help="Verbosity level"),
     ] = 0,
 ):
     configure_logging(verbose)
-    data, _, dtype = get_file_list(path=path, filetype="npz", make_save_path=False)
+    data, _, dtype = get_file_list(
+        path=path, filetype="npz", make_save_path=False
+    )
 
     # check if data is nested list
     if isinstance(data[0], list):
@@ -117,9 +133,7 @@ def main(
     sample_indices = sampler.sample()
 
     savepath = None
-    if dtype == "file":
-        savepath = path.parent / (path.stem + "_samples")
-    elif dtype in ["dir", "subdir"]:
+    if dtype == "file" or dtype in ["dir", "subdir"]:
         savepath = path.parent / (path.stem + "_samples")
     else:
         raise ValueError(f"Unknown dataset type: {dtype}")
@@ -151,9 +165,9 @@ def main(
     if overwrite:
         with open(savepath, "w") as f:
             f.write(
-                orjson.dumps(json_data, option=orjson.OPT_SERIALIZE_NUMPY).decode(
-                    "utf-8"
-                )
+                orjson.dumps(
+                    json_data, option=orjson.OPT_SERIALIZE_NUMPY
+                ).decode("utf-8")
             )
         log.info(f"Saved sample indices to {savepath.with_suffix('.json')}")
     else:

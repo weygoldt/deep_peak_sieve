@@ -1,16 +1,16 @@
+from pathlib import Path
 from typing import Annotated
+
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import orjson
-from pathlib import Path
+import seaborn as sns
 import typer
 from audioio.audioloader import AudioLoader
-from IPython import embed
-import seaborn as sns
 
-from thunderpulse.utils.loggers import get_logger, configure_logging
-from thunderpulse.style import set_light_style, cm, set_dark_style, adjust_alpha
+from thunderpulse.style import cm, set_dark_style
+from thunderpulse.utils.loggers import configure_logging, get_logger
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
 log = get_logger(__name__)
@@ -115,13 +115,25 @@ def plot_peaks(index, sample_indices, raw_file, peak_file):
         )
 
     axes[0].axvline(
-        peak_center, linestyle="--", color="white", label="Peak Center", linewidth=0.75
+        peak_center,
+        linestyle="--",
+        color="white",
+        label="Peak Center",
+        linewidth=0.75,
     )
     axes[0].axvline(
-        peak_start, linestyle="--", color="grey", label="Peak Start", linewidth=0.75
+        peak_start,
+        linestyle="--",
+        color="grey",
+        label="Peak Start",
+        linewidth=0.75,
     )
     axes[0].axvline(
-        peak_stop, linestyle="--", color="grey", label="Peak Stop", linewidth=0.75
+        peak_stop,
+        linestyle="--",
+        color="grey",
+        label="Peak Stop",
+        linewidth=0.75,
     )
 
     axes[0].set_xlabel("Time (samples)")
@@ -164,15 +176,21 @@ def main(
     with open(path, "rb") as f:
         data = orjson.loads(f.read())
         dtype = data["dtype"]
-        log.info(f"Loaded data of type {dtype} with {data['num_samples']} samples.")
+        log.info(
+            f"Loaded data of type {dtype} with {data['num_samples']} samples."
+        )
 
         # TODO: Make original data extension flexible (.wav)
 
     escape = False
     sample_counter = 0
-    n_total_samples = [len(sample_indices) for sample_indices in data["sample_indices"]]
+    n_total_samples = [
+        len(sample_indices) for sample_indices in data["sample_indices"]
+    ]
     n_total_samples = sum(n_total_samples)
-    for sample_indices, data_path in zip(data["sample_indices"], data["files"]):
+    for sample_indices, data_path in zip(
+        data["sample_indices"], data["files"], strict=False
+    ):
         log.info(f"Moving to new file {data_path}")
         data_path = Path(data_path)
 
@@ -181,7 +199,9 @@ def main(
             original_subdir = data_path.parent.stem.replace("_peaks", "")
             original_file = data_path.stem.replace("_peaks", "")
             original_path = (
-                data_path.parent.parent / original_subdir / f"{original_file}.wav"
+                data_path.parent.parent
+                / original_subdir
+                / f"{original_file}.wav"
             )
         elif dtype == "subdir":
             original_dir = data_path.parent.parent.stem.replace("_peaks", "")
@@ -250,7 +270,9 @@ def main(
                     elif key == "f":
                         label = 0
                     else:
-                        raise ValueError(f"Invalid key pressed for correction: {key}")
+                        raise ValueError(
+                            f"Invalid key pressed for correction: {key}"
+                        )
                 else:
                     index = 0
                     log.info("No previous sample to correct.")

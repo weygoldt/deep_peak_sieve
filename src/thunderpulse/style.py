@@ -1,9 +1,10 @@
+import colorsys
+
+import matplotlib.colors as mc
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import LinearSegmentedColormap, ListedColormap
 import seaborn as sns
-import matplotlib.colors as mc
-import colorsys
+from matplotlib.colors import LinearSegmentedColormap, ListedColormap
 
 cm = 1 / 2.54
 mm = 1 / 25.4
@@ -333,7 +334,9 @@ def letter_subplots(
     kwargs = dict(list(my_defaults.items()) + list(kwargs.items()))
 
     list_txts = []
-    for ax, lbl, xoff, yoff in zip(axes, letters, xoffset, yoffset):
+    for ax, lbl, xoff, yoff in zip(
+        axes, letters, xoffset, yoffset, strict=False
+    ):
         t = ax.annotate(lbl, xy=(xoff, yoff), **kwargs)
         list_txts.append(t)
 
@@ -341,9 +344,7 @@ def letter_subplots(
 
 
 def float_rgb_to_hex(rgb):
-    return "#{:02x}{:02x}{:02x}".format(
-        int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255)
-    )
+    return f"#{int(rgb[0] * 255):02x}{int(rgb[1] * 255):02x}{int(rgb[2] * 255):02x}"
 
 
 def show_palette(colors):

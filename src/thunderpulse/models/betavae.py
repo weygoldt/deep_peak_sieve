@@ -1,18 +1,19 @@
+from typing import Any
+
+import lightning as L
 import torch
 import torch.nn.functional as F
-from torch.utils.data import DataLoader, TensorDataset
-from torch import nn, Tensor
-import lightning as L
-from typing import List, Any, Optional
 from lightning.pytorch.callbacks import LearningRateMonitor, lr_monitor
+from torch import Tensor, nn
+from torch.utils.data import DataLoader, TensorDataset
 
+from thunderpulse.models.base import BaseVAE, LitVAE
+from thunderpulse.models.params import batch_size, gamma, lr, n_epochs
 from thunderpulse.models.utils import (
     generate_synthetic_peaks,
-    visualize_latent_space,
     plot_reconstructions,
+    visualize_latent_space,
 )
-from thunderpulse.models.base import BaseVAE, LitVAE
-from thunderpulse.models.params import batch_size, lr, n_epochs, gamma
 
 
 class BetaVAE1D(BaseVAE):
@@ -26,7 +27,7 @@ class BetaVAE1D(BaseVAE):
         self,
         in_channels: int,
         latent_dim: int,
-        hidden_dims: Optional[List[int]] = None,
+        hidden_dims: list[int] | None = None,
         input_length: int = 1024,
         beta: float = 4.0,
         gamma: float = 1000.0,
@@ -109,7 +110,9 @@ class BetaVAE1D(BaseVAE):
         # Decoder
         # ----------------
         hidden_dims.reverse()
-        self.decoder_input = nn.Linear(latent_dim, hidden_dims[0] * self.enc_length)
+        self.decoder_input = nn.Linear(
+            latent_dim, hidden_dims[0] * self.enc_length
+        )
 
         modules = []
         prev_channels = hidden_dims[0]
@@ -120,7 +123,11 @@ class BetaVAE1D(BaseVAE):
             modules.append(
                 nn.Sequential(
                     nn.ConvTranspose1d(
-                        prev_channels, out_channels, kernel_size=4, stride=2, padding=1
+                        prev_channels,
+                        out_channels,
+                        kernel_size=4,
+                        stride=2,
+                        padding=1,
                     ),
                     nn.BatchNorm1d(out_channels),
                     nn.LeakyReLU(),
@@ -139,7 +146,7 @@ class BetaVAE1D(BaseVAE):
         self.decoder = nn.Sequential(*modules)
         hidden_dims.reverse()  # (optional) revert if you need original order later
 
-    def encode(self, input: Tensor) -> List[Tensor]:
+    def encode(self, input: Tensor) -> list[Tensor]:
         """
         Parameters
         ----------
@@ -193,7 +200,9 @@ class BetaVAE1D(BaseVAE):
         eps = torch.randn_like(std)
         return mean + eps * std
 
-    def sample(self, batch_size: int, current_device: int, **kwargs) -> torch.Tensor:
+    def sample(
+        self, batch_size: int, current_device: int, **kwargs
+    ) -> torch.Tensor:
         """
         Parameters
         ----------
@@ -273,7 +282,9 @@ class BetaVAE1D(BaseVAE):
         elif self.loss_type == "B":
             self.C_max = self.C_max.to(input_tensor.device)
             C = torch.clamp(
-                self.C_max / self.C_stop_iter * self.num_iter, 0, self.C_max.item()
+                self.C_max / self.C_stop_iter * self.num_iter,
+                0,
+                self.C_max.item(),
             )
             loss = recons_loss + self.gamma * kld_weight * (kld_loss - C).abs()
         else:
