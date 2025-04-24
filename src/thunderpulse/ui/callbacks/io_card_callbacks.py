@@ -1,8 +1,8 @@
 import pathlib
-from dash import Output, Input
-from probeinterface import read_probeinterface
 
+from dash import Input, Output
 from IPython import embed
+from probeinterface import read_probeinterface
 
 
 def callbacks_io(app):
