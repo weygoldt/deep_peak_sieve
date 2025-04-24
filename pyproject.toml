@@ -1,11 +1,24 @@
 [project]
-name = "deep_peak_sieve"
+name = "thunderpluse"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "audioio",
+    "humanize>=4.12.2",
+    "ipython>=9.1.0",
+    "lightning>=2.5.1",
+    "matplotlib>=3.10.1",
+    "orjson>=3.10.16",
+    "rich>=14.0.0",
+    "scikit-learn>=1.6.1",
+    "seaborn>=0.13.2",
+    "torch>=2.7.0",
+    "torchinfo>=1.8.0",
+    "typer>=0.15.2",
+    "typing-extensions>=4.13.2",
+    "umap-learn>=0.5.7",
 ]
 
 [tool.uv.sources]
@@ -16,6 +29,9 @@ dev = [
     "ruff>=0.11.2",
 ]
 
+[tool.uv]
+package = true
+
 [project.scripts]
 collect_peaks = "deep_peak_sieve.collection.collect_peaks:app"
 sample_peaks = "deep_peak_sieve.sampling.sample_peaks:app"
@@ -23,3 +39,4 @@ label_peaks = "deep_peak_sieve.labeling.label_peaks:app"
 explore = "deep_peak_sieve.exploration:app"
 train_classifier = "deep_peak_sieve.classification.train_classifier:app"
 classify_peaks = "deep_peak_sieve.classification.classify_peaks:app"
+
