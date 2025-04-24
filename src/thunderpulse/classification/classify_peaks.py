@@ -47,10 +47,12 @@ def main(
             except Exception as e:
                 log.error(f"Error loading file {file}: {e}")
                 log.error(f"Skipping file {file}")
+                pbar.advance(task, 1)
                 continue
 
             if "predicted_labels" in data.keys():
                 log.warning(f"File {file} already classified. Skipping.")
+                pbar.advance(task, 1)
                 continue
 
             # mu, std = np.mean(peaks), np.std(peaks)
@@ -64,6 +66,7 @@ def main(
             n_peaks = peaks.shape[0]
             if n_peaks == 0:
                 log.warning(f"No peaks found in file {file}")
+                pbar.advance(task, 1)
                 continue
 
             n_batches = int(np.ceil(n_peaks / batch_size))
