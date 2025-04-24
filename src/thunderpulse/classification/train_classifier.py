@@ -13,8 +13,8 @@ from rich.table import Table
 from rich.console import Console
 
 
-from deep_peak_sieve.models.inception_time import InceptionTimeEnsemble
-from deep_peak_sieve.utils.loggers import get_logger, configure_logging
+from thunderpulse.models.inception_time import InceptionTimeEnsemble
+from thunderpulse.utils.loggers import get_logger, configure_logging
 
 
 con = Console()
@@ -44,15 +44,25 @@ def main(
 
     all_labels = []
     all_peaks = []
+    log.info("Loading data ...")
     for sample_indices, data_path in zip(data["sample_indices"], data["files"]):
-        data_path = Path(data_path)
-        peak_file = np.load(data_path)
+        # patch data path to new mount point
+        data_path = data_path.replace("/mnt/data1/", "/home/weygoldt/mountpoint/")
+        # data_path = Path(data_path).resolve()
 
-        labeled_peaks = peak_file["peaks"][sample_indices]
-        labels = peak_file["labels"][sample_indices]
+        data_path = Path(data_path)
+        try:
+            peak_file = np.load(data_path)
+            labeled_peaks = peak_file["peaks"][sample_indices]
+            labels = peak_file["labels"][sample_indices]
+        except Exception as e:
+            log.error(f"Failed to load {data_path}: {e}")
+            continue
 
         all_labels.append(labels)
         all_peaks.append(labeled_peaks)
+
+        log.info(f"Loaded {len(sample_indices)} samples from {data_path}")
 
     try:
         labels = np.concatenate(all_labels)

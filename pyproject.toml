@@ -1,5 +1,5 @@
 [project]
-name = "thunderpluse"
+name = "thunderpulse"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -33,10 +33,9 @@ dev = [
 package = true
 
 [project.scripts]
-collect_peaks = "deep_peak_sieve.collection.collect_peaks:app"
-sample_peaks = "deep_peak_sieve.sampling.sample_peaks:app"
-label_peaks = "deep_peak_sieve.labeling.label_peaks:app"
-explore = "deep_peak_sieve.exploration:app"
-train_classifier = "deep_peak_sieve.classification.train_classifier:app"
-classify_peaks = "deep_peak_sieve.classification.classify_peaks:app"
-
+collect_peaks = "thunderpulse.collection.collect_peaks:app"
+sample_peaks = "thunderpulse.sampling.sample_peaks:app"
+label_peaks = "thunderpulse.labeling.label_peaks:app"
+explore = "thunderpulse.exploration:app"
+train_classifier = "thunderpulse.classification.train_classifier:app"
+classify_peaks = "thunderpulse.classification.classify_peaks:app"

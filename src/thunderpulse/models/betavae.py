@@ -6,13 +6,13 @@ import lightning as L
 from typing import List, Any, Optional
 from lightning.pytorch.callbacks import LearningRateMonitor, lr_monitor
 
-from deep_peak_sieve.models.utils import (
+from thunderpulse.models.utils import (
     generate_synthetic_peaks,
     visualize_latent_space,
     plot_reconstructions,
 )
-from deep_peak_sieve.models.base import BaseVAE, LitVAE
-from deep_peak_sieve.models.params import batch_size, lr, n_epochs, gamma
+from thunderpulse.models.base import BaseVAE, LitVAE
+from thunderpulse.models.params import batch_size, lr, n_epochs, gamma
 
 
 class BetaVAE1D(BaseVAE):

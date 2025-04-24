@@ -9,8 +9,8 @@ from audioio.audioloader import AudioLoader
 from IPython import embed
 import seaborn as sns
 
-from deep_peak_sieve.utils.loggers import get_logger, configure_logging
-from deep_peak_sieve.style import set_light_style, cm, set_dark_style, adjust_alpha
+from thunderpulse.utils.loggers import get_logger, configure_logging
+from thunderpulse.style import set_light_style, cm, set_dark_style, adjust_alpha
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
 log = get_logger(__name__)

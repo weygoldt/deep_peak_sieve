@@ -7,13 +7,13 @@ from torch.utils.data import DataLoader, TensorDataset
 from lightning.pytorch.callbacks import LearningRateMonitor
 from typing import List, Tuple
 
-from deep_peak_sieve.models.utils import (
+from thunderpulse.models.utils import (
     generate_synthetic_peaks,
     visualize_latent_space,
     plot_reconstructions,
 )
-from deep_peak_sieve.models.base import BaseVAE, LitVAE
-from deep_peak_sieve.models.params import lr, batch_size, gamma
+from thunderpulse.models.base import BaseVAE, LitVAE
+from thunderpulse.models.params import lr, batch_size, gamma
 
 
 class Conv1dLayer(nn.Module):

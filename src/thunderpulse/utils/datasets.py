@@ -3,7 +3,7 @@ from pathlib import Path
 from audioio.audioloader import AudioLoader
 from dataclasses import dataclass
 
-from deep_peak_sieve.utils.loggers import get_logger
+from thunderpulse.utils.loggers import get_logger
 
 
 log = get_logger(__name__)

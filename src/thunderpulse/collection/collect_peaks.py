@@ -11,9 +11,9 @@ from scipy.signal import find_peaks, savgol_filter
 from scipy.interpolate import interp1d
 from IPython import embed
 
-from deep_peak_sieve.utils.loggers import get_logger, get_progress, configure_logging
-from deep_peak_sieve.collection.filters import bandpass_filter
-from deep_peak_sieve.utils.datasets import load_raw_data, save_numpy
+from thunderpulse.utils.loggers import get_logger, get_progress, configure_logging
+from thunderpulse.collection.filters import bandpass_filter
+from thunderpulse.utils.datasets import load_raw_data, save_numpy
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
 log = get_logger(__name__)
