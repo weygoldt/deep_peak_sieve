@@ -1,5 +1,5 @@
-from dash import Output, Input, html, dcc
 import nixio
+from dash import Input, Output, dcc, html
 
 
 def create_time_slider():
@@ -37,9 +37,9 @@ def callback_time_slider(app):
             return "Time Slider [1s]", 10, 1
         if not filepath["data_path"]:
             return "Time Slider [1 s]", 10, 1
-        else:
-            nix_file = nixio.File(filepath["data_path"], nixio.FileMode.ReadOnly)
-            data_shape = nix_file.blocks[0].data_arrays["data"].shape[0]
-            section = nix_file.sections["recording"]
-            sample_rate = float(section["samplerate"][0])
-            return f"Time Slider [1 s]", data_shape, sample_rate * 0.5
+
+        nix_file = nixio.File(filepath["data_path"], nixio.FileMode.ReadOnly)
+        data_shape = nix_file.blocks[0].data_arrays["data"].shape[0]
+        section = nix_file.sections["recording"]
+        sample_rate = float(section["samplerate"][0])
+        return "Time Slider [1 s]", data_shape, sample_rate * 0.5

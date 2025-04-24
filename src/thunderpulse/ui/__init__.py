@@ -1,7 +1,8 @@
-from . import channel_slider
-from . import time_slider
-from . import layout_probe_graph
-from . import layout_visualization_tabs
-from . import layout_config_tabs
-from . import callbacks
-
+from . import (
+    callbacks,
+    channel_slider,
+    layout_config_tabs,
+    layout_probe_graph,
+    layout_visualization_tabs,
+    time_slider,
+)
