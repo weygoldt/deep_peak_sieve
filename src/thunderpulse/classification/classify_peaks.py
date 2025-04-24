@@ -41,8 +41,17 @@ def main(
     with get_progress() as pbar:
         task = pbar.add_task("Classifying peaks", total=len(file_list))
         for i, file in enumerate(file_list):
-            data = np.load(file)
-            peaks = data["peaks"]
+            try:
+                data = np.load(file)
+                peaks = data["peaks"]
+            except Exception as e:
+                log.error(f"Error loading file {file}: {e}")
+                log.error(f"Skipping file {file}")
+                continue
+
+            if "predicted_labels" in data.keys():
+                log.warning(f"File {file} already classified. Skipping.")
+                continue
 
             # mu, std = np.mean(peaks), np.std(peaks)
             # peaks = (peaks - mu) / std
