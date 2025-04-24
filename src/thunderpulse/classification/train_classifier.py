@@ -1,21 +1,24 @@
-from typing import Annotated
-import numpy as np
-from IPython import embed
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import balanced_accuracy_score, f1_score, average_precision_score
+import shutil
 from pathlib import Path
+from typing import Annotated
+
 import matplotlib.pyplot as plt
-import typer
+import numpy as np
 import orjson
 import seaborn as sns
-import shutil
-from rich.table import Table
+import typer
+from IPython import embed
 from rich.console import Console
-
+from rich.table import Table
+from sklearn.metrics import (
+    average_precision_score,
+    balanced_accuracy_score,
+    f1_score,
+)
+from sklearn.model_selection import train_test_split
 
 from thunderpulse.models.inception_time import InceptionTimeEnsemble
-from thunderpulse.utils.loggers import get_logger, configure_logging
-
+from thunderpulse.utils.loggers import configure_logging, get_logger
 
 con = Console()
 log = get_logger(__name__)
@@ -24,7 +27,9 @@ app = typer.Typer(pretty_exceptions_show_locals=False)
 
 @app.command()
 def main(
-    path: Annotated[Path, typer.Argument(help="Path to the dataset JSON file")],
+    path: Annotated[
+        Path, typer.Argument(help="Path to the dataset JSON file")
+    ],
     n_models: Annotated[int, typer.Option("--n_models", "-n")] = 5,
     n_epochs: Annotated[int, typer.Option("--n_epochs", "-e")] = 20,
     verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
@@ -45,9 +50,13 @@ def main(
     all_labels = []
     all_peaks = []
     log.info("Loading data ...")
-    for sample_indices, data_path in zip(data["sample_indices"], data["files"]):
+    for sample_indices, data_path in zip(
+        data["sample_indices"], data["files"], strict=False
+    ):
         # patch data path to new mount point
-        data_path = data_path.replace("/mnt/data1/", "/home/weygoldt/mountpoint/")
+        data_path = data_path.replace(
+            "/mnt/data1/", "/home/weygoldt/mountpoint/"
+        )
         # data_path = Path(data_path).resolve()
 
         data_path = Path(data_path)
@@ -95,7 +104,9 @@ def main(
     # Fit and test the model
     model.fit(xtrain, ytrain, n_epochs)
 
-    log.info("Training complete. Testing the full ensemble on the test set ...")
+    log.info(
+        "Training complete. Testing the full ensemble on the test set ..."
+    )
 
     # Load the best model from the checkpoints
     model.load_model(checkpoint_dir)
@@ -125,7 +136,7 @@ def main(
     table.add_row("Average Precision", f"{aps:.2f}")
     con.print(table)
 
-    for yhat, y, x in zip(preds, ytest, xtest):
+    for yhat, y, x in zip(preds, ytest, xtest, strict=False):
         # x = np.expand_dims(x, axis=0)  # add channel dimension
         # yhat, probs = model.predict(x)
         color = correct_color if yhat == y else error_color
@@ -136,7 +147,7 @@ def main(
 
     # make legend entries unique
     handles, labels = axs[0].get_legend_handles_labels()
-    unique_labels = dict(zip(labels, handles))
+    unique_labels = dict(zip(labels, handles, strict=False))
     axs[0].legend(unique_labels.values(), unique_labels.keys())
     axs[0].set_title("Label 1")
     axs[1].set_title("Label 0")

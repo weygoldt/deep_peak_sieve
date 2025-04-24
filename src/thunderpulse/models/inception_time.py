@@ -1,23 +1,24 @@
-import torch
-import lightning as L
-import torch.nn.functional as F
-from torch import nn
 from collections import OrderedDict
-from torch.utils.data import DataLoader, TensorDataset
-from sklearn.model_selection import train_test_split
 from pathlib import Path
-from lightning.pytorch.callbacks import ModelCheckpoint
-from lightning.pytorch import Trainer
+
+import lightning as L
 import numpy as np
+import torch
+import torch.nn.functional as F
+from lightning.pytorch import Trainer
+from lightning.pytorch.callbacks import ModelCheckpoint
 from sklearn.metrics import (
     accuracy_score,
+    average_precision_score,
     balanced_accuracy_score,
+    f1_score,
     precision_score,
     recall_score,
-    f1_score,
     roc_auc_score,
-    average_precision_score,
 )
+from sklearn.model_selection import train_test_split
+from torch import nn
+from torch.utils.data import DataLoader, TensorDataset
 
 from thunderpulse.utils.loggers import get_logger
 
@@ -171,7 +172,9 @@ class InceptionModel(nn.Module):
         # Global Average Pool
         modules["avg_pool"] = Lambda(f=lambda x: torch.mean(x, dim=-1))
         # Final linear layer
-        modules["linear"] = nn.Linear(in_features=4 * filters, out_features=num_classes)
+        modules["linear"] = nn.Linear(
+            in_features=4 * filters, out_features=num_classes
+        )
 
         self.model = nn.Sequential(modules)
 
@@ -263,7 +266,9 @@ class InceptionTimeLightning(L.LightningModule):
         self.log("lr", lr, on_step=False, on_epoch=True)
 
         # Accuracy on training batch
-        preds = torch.argmax(torch.nn.functional.softmax(logits, dim=-1), dim=-1)
+        preds = torch.argmax(
+            torch.nn.functional.softmax(logits, dim=-1), dim=-1
+        )
         acc = (preds == y).float().mean()
         self.log("train_acc", acc, on_step=False, on_epoch=True)
 
@@ -278,7 +283,9 @@ class InceptionTimeLightning(L.LightningModule):
         loss = self.loss_fn(logits, y)
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
 
-        preds = torch.argmax(torch.nn.functional.softmax(logits, dim=-1), dim=-1)
+        preds = torch.argmax(
+            torch.nn.functional.softmax(logits, dim=-1), dim=-1
+        )
         acc = accuracy_score(y.cpu(), preds.cpu())
         f1 = f1_score(y.cpu(), preds.cpu(), average="weighted")
         avg_precision = average_precision_score(
@@ -324,9 +331,13 @@ class InceptionTimeLightning(L.LightningModule):
         x, y = batch
         logits = self.forward(x)
         loss = self.loss_fn(logits, y)
-        self.log("test_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log(
+            "test_loss", loss, on_step=False, on_epoch=True, prog_bar=True
+        )
 
-        preds = torch.argmax(torch.nn.functional.softmax(logits, dim=-1), dim=-1)
+        preds = torch.argmax(
+            torch.nn.functional.softmax(logits, dim=-1), dim=-1
+        )
         acc = (preds == y).float().mean()
         balanced_acc = balanced_accuracy_score(y.cpu(), preds.cpu())
         precision = precision_score(y.cpu(), preds.cpu(), average="weighted")
@@ -337,12 +348,16 @@ class InceptionTimeLightning(L.LightningModule):
             y.cpu(), preds.cpu(), average="weighted"
         )
         self.log("test_acc", acc, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("test_balanced_acc", balanced_acc, on_step=False, on_epoch=True)
+        self.log(
+            "test_balanced_acc", balanced_acc, on_step=False, on_epoch=True
+        )
         self.log("test_precision", precision, on_step=False, on_epoch=True)
         self.log("test_recall", recall, on_step=False, on_epoch=True)
         self.log("test_f1", f1, on_step=False, on_epoch=True)
         self.log("test_roc_auc", roc_auc, on_step=False, on_epoch=True)
-        self.log("test_avg_precision", avg_precision, on_step=False, on_epoch=True)
+        self.log(
+            "test_avg_precision", avg_precision, on_step=False, on_epoch=True
+        )
 
         return loss
 
@@ -370,7 +385,9 @@ class InceptionTimeLightning(L.LightningModule):
 
 
 class InceptionTimeEnsemble:
-    def __init__(self, n_models=5, input_size=300, num_classes=2, filters=32, depth=6):
+    def __init__(
+        self, n_models=5, input_size=300, num_classes=2, filters=32, depth=6
+    ):
         self.n_models = n_models
         self.models = []
         self.device = (
@@ -404,13 +421,17 @@ class InceptionTimeEnsemble:
 
         # Check if the number of models in the checkpoint directory matches the number of models in the ensemble
         current_model_checkpoints = list(chckpoint_path.glob("*ckpt"))
-        model_handles = [x.stem.split("_")[1] for x in current_model_checkpoints]
+        model_handles = [
+            x.stem.split("_")[1] for x in current_model_checkpoints
+        ]
         if len(np.unique(model_handles)) != self.n_models:
             msg = f"Number of models in the checkpoint directory ({len(np.unique(model_handles))}) does not match the number of models in the ensemble ({self.n_models})."
             raise ValueError(msg)
 
         for i in range(self.n_models):
-            current_model_checkpoints = list(chckpoint_path.glob(f"model_{i}_*"))
+            current_model_checkpoints = list(
+                chckpoint_path.glob(f"model_{i}_*")
+            )
             if len(current_model_checkpoints) == 0:
                 msg = f"No checkpoints found for model {i}. Train the model first or set the correct number of models."
                 raise ValueError(msg)
@@ -504,7 +525,11 @@ class InceptionTimeEnsemble:
         preds = []
         probs = []
 
-        x = torch.from_numpy(x).float() if not isinstance(x, torch.Tensor) else x
+        x = (
+            torch.from_numpy(x).float()
+            if not isinstance(x, torch.Tensor)
+            else x
+        )
         x = x.to(self.device)
 
         for model in self.models:

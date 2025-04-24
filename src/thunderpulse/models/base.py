@@ -1,9 +1,8 @@
-from torch import Tensor
-from torch import nn
 from abc import abstractmethod
-from typing import Any, List, Union, Tuple
+from typing import Any
+
 import lightning as L
-from torch import optim
+from torch import Tensor, nn, optim
 
 batch_size = 1000
 lr = 1e-3
@@ -16,7 +15,7 @@ class BaseVAE(nn.Module):
         super(BaseVAE, self).__init__()
 
     @abstractmethod
-    def encode(self, input: Tensor) -> List[Tensor]:
+    def encode(self, input: Tensor) -> list[Tensor]:
         pass
 
     @abstractmethod
@@ -36,7 +35,7 @@ class BaseVAE(nn.Module):
         pass
 
     @abstractmethod
-    def forward(self, inputs: Tensor) -> Tuple[Tensor, ...]:
+    def forward(self, inputs: Tensor) -> tuple[Tensor, ...]:
         pass
 
     @abstractmethod
@@ -67,7 +66,9 @@ class LitVAE(L.LightningModule):
         """
         super().__init__()
         self.model = model
-        self.save_hyperparameters(ignore=["model"])  # saves lr, kld_weight, etc.
+        self.save_hyperparameters(
+            ignore=["model"]
+        )  # saves lr, kld_weight, etc.
         self.lr = lr
         self.kld_weight = kld_weight
 
@@ -87,7 +88,7 @@ class LitVAE(L.LightningModule):
         """
         return self.model(x)
 
-    def training_step(self, batch: Union[Tensor, Any], batch_idx: int) -> Tensor:
+    def training_step(self, batch: Tensor | Any, batch_idx: int) -> Tensor:
         """
         Parameters
         ----------
@@ -119,7 +120,7 @@ class LitVAE(L.LightningModule):
         loss = data["loss"]
         return loss
 
-    def validation_step(self, batch: Union[Tensor, Any], batch_idx: int) -> Tensor:
+    def validation_step(self, batch: Tensor | Any, batch_idx: int) -> Tensor:
         """
         Parameters
         ----------
@@ -142,7 +143,9 @@ class LitVAE(L.LightningModule):
         # data = self.model.loss_function(*outputs, M_N=self.kld_weight)
         data = self.model.loss_function(*outputs)
         val_loss = data["loss"]
-        self.log("val_loss", val_loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log(
+            "val_loss", val_loss, on_step=False, on_epoch=True, prog_bar=True
+        )
         return val_loss
 
     def configure_optimizers(self):
@@ -153,7 +156,9 @@ class LitVAE(L.LightningModule):
             Configured optimizer for training.
         """
         optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
-        step_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.5)
+        step_scheduler = optim.lr_scheduler.StepLR(
+            optimizer, step_size=30, gamma=0.5
+        )
         return [optimizer], [
             {
                 "scheduler": step_scheduler,

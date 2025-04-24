@@ -1,24 +1,30 @@
 # Code is mainly adapted from  https://github.com/ViktorvdValk/Interpretable_VAE_for_ECG
+
 import lightning as L
 import torch
-import torch.nn as nn
+from lightning.pytorch.callbacks import LearningRateMonitor
+from torch import nn
 from torch.autograd import Variable
 from torch.utils.data import DataLoader, TensorDataset
-from lightning.pytorch.callbacks import LearningRateMonitor
-from typing import List, Tuple
 
+from thunderpulse.models.base import BaseVAE, LitVAE
+from thunderpulse.models.params import batch_size, gamma, lr
 from thunderpulse.models.utils import (
     generate_synthetic_peaks,
-    visualize_latent_space,
     plot_reconstructions,
+    visualize_latent_space,
 )
-from thunderpulse.models.base import BaseVAE, LitVAE
-from thunderpulse.models.params import lr, batch_size, gamma
 
 
 class Conv1dLayer(nn.Module):
     def __init__(
-        self, in_channels, out_channels, kernel_size, stride, dilation=1, bias=True
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride,
+        dilation=1,
+        bias=True,
     ):
         super(Conv1dLayer, self).__init__()
 
@@ -44,7 +50,13 @@ class Conv1dLayer(nn.Module):
 
 class FConv1dLayer(nn.Module):
     def __init__(
-        self, in_channels, out_channels, kernel_size, stride, dilation=1, bias=True
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride,
+        dilation=1,
+        bias=True,
     ):
         super(FConv1dLayer, self).__init__()
 
@@ -68,7 +80,12 @@ class FConv1dLayer(nn.Module):
 
 class LSTMLayer(nn.Module):
     def __init__(
-        self, input_size, hidden_size, num_layers, dropout=0.0, bidirectional=False
+        self,
+        input_size,
+        hidden_size,
+        num_layers,
+        dropout=0.0,
+        bidirectional=False,
     ):
         super(LSTMLayer, self).__init__()
         self.lstm = nn.LSTM(
@@ -86,7 +103,12 @@ class LSTMLayer(nn.Module):
 
 class GRULayer(nn.Module):
     def __init__(
-        self, input_size, hidden_size, num_layers, dropout=0.0, bidirectional=False
+        self,
+        input_size,
+        hidden_size,
+        num_layers,
+        dropout=0.0,
+        bidirectional=False,
     ):
         super(GRULayer, self).__init__()
         self.gru = nn.GRU(
@@ -113,7 +135,8 @@ class HeadLayer(nn.Module):
 
         if out_channels % 4 != 0:
             raise ValueError(
-                "out_channels must be divisible by 4, but got: %d" % out_channels
+                "out_channels must be divisible by 4, but got: %d"
+                % out_channels
             )
 
         unit = out_channels // 4
@@ -190,7 +213,12 @@ class HeadLayer(nn.Module):
 
 class ResBlockV1(nn.Module):
     def __init__(
-        self, in_channels, out_channels, kernel_size, stride, negative_slope=0.2
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride,
+        negative_slope=0.2,
     ):
         super(ResBlockV1, self).__init__()
 
@@ -203,13 +231,17 @@ class ResBlockV1(nn.Module):
             )
 
         self.conv1 = nn.Sequential(
-            Conv1dLayer(in_channels, out_channels, kernel_size, stride, bias=False),
+            Conv1dLayer(
+                in_channels, out_channels, kernel_size, stride, bias=False
+            ),
             nn.BatchNorm1d(out_channels),
             nn.LeakyReLU(negative_slope),
         )
 
         self.conv2 = nn.Sequential(
-            Conv1dLayer(out_channels, out_channels, kernel_size, 1, bias=False),
+            Conv1dLayer(
+                out_channels, out_channels, kernel_size, 1, bias=False
+            ),
             nn.BatchNorm1d(out_channels),
         )
 
@@ -248,7 +280,7 @@ def z_sample(z):
 
 def recon_loss(x, x_bar):
     """
-    reconstruct loss
+    Reconstruct loss
     :param x:
     :param x_bar:
     :return:
@@ -293,7 +325,9 @@ class Encoder(nn.Module):
         out_features = [16, 24, 32, 32]
         n_blocks = [2, 2, 2, 2]
 
-        for in_chan, out_chan, n_block in zip(in_features, out_features, n_blocks):
+        for in_chan, out_chan, n_block in zip(
+            in_features, out_features, n_blocks, strict=False
+        ):
             self.layers.append(
                 nn.Sequential(
                     Conv1dLayer(in_chan, out_chan, 3, 2, bias=False),
@@ -302,7 +336,9 @@ class Encoder(nn.Module):
                 )
             )
             for _ in range(n_block):
-                self.layers.append(ResBlockV1(out_chan, out_chan, 3, 1, negative_slope))
+                self.layers.append(
+                    ResBlockV1(out_chan, out_chan, 3, 1, negative_slope)
+                )
 
         self.layers.append(
             nn.Sequential(
@@ -331,7 +367,9 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         # (N, 256) to (N, 32, 8)
         self.fc = nn.Sequential(
-            nn.Linear(z_dim, 256), nn.BatchNorm1d(256), nn.LeakyReLU(negative_slope)
+            nn.Linear(z_dim, 256),
+            nn.BatchNorm1d(256),
+            nn.LeakyReLU(negative_slope),
         )
 
         in_features = [32, 32, 24, 16, 16]
@@ -340,7 +378,9 @@ class Decoder(nn.Module):
 
         self.layers = nn.ModuleList()
 
-        for in_chan, out_chan, n_block in zip(in_features, out_features, n_blocks):
+        for in_chan, out_chan, n_block in zip(
+            in_features, out_features, n_blocks, strict=False
+        ):
             self.layers.append(
                 nn.Sequential(
                     FConv1dLayer(in_chan, out_chan, 3, 2, bias=False),
@@ -349,11 +389,15 @@ class Decoder(nn.Module):
                 )
             )
             for _ in range(n_block):
-                self.layers.append(ResBlockV1(out_chan, out_chan, 3, 1, negative_slope))
+                self.layers.append(
+                    ResBlockV1(out_chan, out_chan, 3, 1, negative_slope)
+                )
 
         self.layers.append(
             nn.Sequential(
-                Conv1dLayer(out_features[-1], out_features[-1], 3, 1, bias=False),
+                Conv1dLayer(
+                    out_features[-1], out_features[-1], 3, 1, bias=False
+                ),
                 nn.BatchNorm1d(out_features[-1]),
                 nn.LeakyReLU(negative_slope),
             )
@@ -363,7 +407,9 @@ class Decoder(nn.Module):
         else:
             # self.tail = Conv1dLayer(out_features[-1], 1, 1, 1, bias=True)
             self.tail = nn.Sequential(
-                Conv1dLayer(out_features[-1], out_features[-1] // 2, 5, 1, bias=True),
+                Conv1dLayer(
+                    out_features[-1], out_features[-1] // 2, 5, 1, bias=True
+                ),
                 nn.BatchNorm1d(out_features[-1] // 2),
                 nn.LeakyReLU(negative_slope),
                 Conv1dLayer(out_features[-1] // 2, 1, 3, 1, bias=True),
@@ -409,11 +455,13 @@ class VAEEGModel(BaseVAE):
             in_channels=in_channels, z_dim=z_dim, negative_slope=negative_slope
         )
         self.decoder_net = Decoder(
-            z_dim=z_dim, negative_slope=negative_slope, last_lstm=decoder_last_lstm
+            z_dim=z_dim,
+            negative_slope=negative_slope,
+            last_lstm=decoder_last_lstm,
         )
         self.gamma = gamma
 
-    def encode(self, input) -> List[torch.Tensor]:
+    def encode(self, input) -> list[torch.Tensor]:
         """
         Returns (mu, log_var).
         """
@@ -434,7 +482,7 @@ class VAEEGModel(BaseVAE):
         eps = torch.randn_like(std)
         return mean + eps * std
 
-    def forward(self, inputs) -> Tuple[torch.Tensor, ...]:
+    def forward(self, inputs) -> tuple[torch.Tensor, ...]:
         """
         1) Encode -> (mu, log_var)
         2) Reparameterize -> z

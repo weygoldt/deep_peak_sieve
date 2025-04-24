@@ -1,16 +1,18 @@
-import typer
-from typing import Annotated
-from pathlib import Path
-from IPython import embed
-import numpy as np
-import matplotlib.pyplot as plt
 import gc
+from pathlib import Path
+from typing import Annotated
+
+import numpy as np
 import torch
+import typer
 
 from thunderpulse.models.inception_time import InceptionTimeEnsemble
-from thunderpulse.utils.loggers import get_logger, configure_logging, get_progress
 from thunderpulse.utils.datasets import get_file_list
-
+from thunderpulse.utils.loggers import (
+    configure_logging,
+    get_logger,
+    get_progress,
+)
 
 log = get_logger(__name__)
 app = typer.Typer(pretty_exceptions_show_locals=False)
@@ -28,7 +30,9 @@ def main(
     configure_logging(verbose)
     model = InceptionTimeEnsemble()
     model.load_model(chkpt_dir)
-    file_list, _, dtype = get_file_list(path, filetype="npz", make_save_path=False)
+    file_list, _, dtype = get_file_list(
+        path, filetype="npz", make_save_path=False
+    )
 
     # flatten file list if nested
     if isinstance(file_list[0], list):
@@ -37,8 +41,19 @@ def main(
     with get_progress() as pbar:
         task = pbar.add_task("Classifying peaks", total=len(file_list))
         for i, file in enumerate(file_list):
-            data = np.load(file)
-            peaks = data["peaks"]
+            try:
+                data = np.load(file)
+                peaks = data["peaks"]
+            except Exception as e:
+                log.error(f"Error loading file {file}: {e}")
+                log.error(f"Skipping file {file}")
+                pbar.advance(task, 1)
+                continue
+
+            if "predicted_labels" in data.keys():
+                log.warning(f"File {file} already classified. Skipping.")
+                pbar.advance(task, 1)
+                continue
 
             # mu, std = np.mean(peaks), np.std(peaks)
             # peaks = (peaks - mu) / std
@@ -51,6 +66,7 @@ def main(
             n_peaks = peaks.shape[0]
             if n_peaks == 0:
                 log.warning(f"No peaks found in file {file}")
+                pbar.advance(task, 1)
                 continue
 
             n_batches = int(np.ceil(n_peaks / batch_size))

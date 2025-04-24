@@ -1,14 +1,15 @@
+import importlib
 import logging
 import pkgutil
-import importlib
 from pathlib import Path
+
 from rich.logging import RichHandler
 from rich.progress import (
-    SpinnerColumn,
-    Progress,
-    TextColumn,
     BarColumn,
     MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
 )
@@ -54,7 +55,9 @@ def configure_logging(
         file_handler = logging.FileHandler(log_file)
         file_handler.setLevel(level)
         file_handler.setFormatter(
-            logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            )
         )
         handlers.append(file_handler)
 
