@@ -2,13 +2,13 @@ import dash_bootstrap_components as dbc
 from dash import html
 
 
-def create_io_card():
-    io_card = dbc.Card(
+def create_io_card() -> dbc.Card:
+    return dbc.Card(
         dbc.CardBody(
             [
                 html.P("Data Folder", className="card-text"),
                 dbc.Input(
-                    type="str",
+                    type="text",
                     placeholder="Please put in your datapath",
                     id="datapath",
                     persistence=True,
@@ -18,7 +18,7 @@ def create_io_card():
                 html.Br(),
                 html.P("Save Path", className="card-text"),
                 dbc.Input(
-                    type="str",
+                    type="text",
                     placeholder="Please put in your save path",
                     id="savepath",
                     persistence=True,
@@ -28,7 +28,7 @@ def create_io_card():
                 html.Br(),
                 html.P("Layout of Probe/Grid", className="card-text"),
                 dbc.Input(
-                    type="str",
+                    type="text",
                     placeholder="Please put in your path to the probe/grid layout",
                     id="probepath",
                     persistence=True,
@@ -56,4 +56,3 @@ def create_io_card():
             ]
         )
     )
-    return io_card
