@@ -147,6 +147,7 @@ classify_peaks /path/to/dataset_peaks -vvv
 
 ## TODO ✅
 
+- [ ] Add print statement for overall labeling progress
 - [ ] We need a dashboard (or similar) to explore signal to tune peak detection parameters: 
    - Should support peak detection parameters and filtering parameters (savgol, bandpass, etc.)
    - Sliders to tune parameters
