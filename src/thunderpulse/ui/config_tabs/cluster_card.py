@@ -3,7 +3,7 @@ from dash import dcc, html
 
 
 def create_cluster_card():
-    cluster_card = dbc.Card(
+    return dbc.Card(
         dbc.CardBody(
             [
                 html.P(
@@ -130,4 +130,3 @@ def create_cluster_card():
             ]
         ),
     )
-    return cluster_card
