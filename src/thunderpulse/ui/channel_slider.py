@@ -1,14 +1,17 @@
-from IPython import embed
-from dash import html, dcc, Output, Input
-import numpy as np
 import nixio
+import numpy as np
+from dash import Input, Output, dcc, html
+from IPython import embed
+
+import thunderpulse.utils as utils
 
 
 def create_channel_slider():
     channel_slider = html.Div(
-
         [
-            html.H5(children="Channel Selector", style={"textAlign": "center"}),
+            html.H5(
+                children="Channel Selector", style={"textAlign": "center"}
+            ),
             dcc.RangeSlider(
                 0,
                 10,
@@ -34,19 +37,25 @@ def callback_channel_slider(app):
             return 10, None
         if not filepath["data_path"]:
             return 10, None
-        else:
-            nix_file = nixio.File(filepath["data_path"], nixio.FileMode.ReadOnly)
-            section = nix_file.sections["recording"]
-            channels = int(section["channels"])
-            probe_frame = nix_file.blocks[0].data_frames["probe_frame"]
-            sorted_after_y_pos = np.argsort(probe_frame["y"])
 
-            nix_file.close()
-            marks = {
-                f"{id[0]}": {"label": f"{id[1]}"}
-                for id in zip(np.arange(channels), sorted_after_y_pos)
-            }
-            return channels - 1, marks
+        # nix_file = nixio.File(filepath["data_path"], nixio.FileMode.ReadOnly)
+        # section = nix_file.sections["recording"]
+        # channels = int(section["channels"])
+        # probe_frame = nix_file.blocks[0].data_frames["probe_frame"]
+        # sorted_after_y_pos = np.argsort(probe_frame["y"])
+        # nix_file.close()
+
+        ds = utils.data.load_data(**filepath)
+        # WARNING: Does not sort anymore after probe layout
+
+        marks = {
+            f"{id[0]}": {"label": f"{id[1]}"}
+            for id in zip(
+                np.arange(ds.metadata.channels),
+                np.arange(ds.metadata.channels),
+            )
+        }
+        return ds.metadata.channels - 1, marks
 
     @app.callback(
         Output("channel_range_slider", "value"),
@@ -59,7 +68,9 @@ def callback_channel_slider(app):
         elif not selected_data["points"]:
             return [0, 15]
         else:
-            nix_file = nixio.File(filepaths["data_path"], nixio.FileMode.ReadOnly)
+            nix_file = nixio.File(
+                filepaths["data_path"], nixio.FileMode.ReadOnly
+            )
             probe_frame = nix_file.blocks[0].data_frames["probe_frame"]
             sorted_after_y_pos = np.argsort(probe_frame["y"])
             channels = []

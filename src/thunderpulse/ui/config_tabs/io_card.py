@@ -3,6 +3,13 @@ from dash import html
 
 
 def create_io_card() -> dbc.Card:
+    """Create and return an IO Card.
+
+    Returns
+    -------
+    dbc.Card
+
+    """
     return dbc.Card(
         dbc.CardBody(
             [
@@ -37,21 +44,13 @@ def create_io_card() -> dbc.Card:
                 ),
                 html.Br(),
                 html.Div(
-                    [
-                        dbc.Button(
-                            "Load the data",
-                            color="info",
-                            id="bt_load_data",
-                            n_clicks=0,
-                        ),
-                        dbc.Button(
-                            "Overwrite Nix File",
-                            color="info",
-                            id="bt_overwrite_nix_file",
-                            n_clicks=0,
-                        ),
-                    ],
-                    className="d-grid gap-2",
+                    dbc.Button(
+                        "Load the data",
+                        color="info",
+                        id="bt_load_data",
+                        n_clicks=0,
+                    ),
+                    className="d-grid",
                 ),
             ]
         )
