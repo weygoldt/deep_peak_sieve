@@ -1,9 +1,11 @@
 import nixio
 from dash import Input, Output, dcc, html
 
+import thunderpulse.utils as utils
+
 
 def create_time_slider():
-    time_slider = html.Div(
+    return html.Div(
         [
             html.H5(
                 children="Time Slider [1 s]",
@@ -22,7 +24,6 @@ def create_time_slider():
             ),
         ]
     )
-    return time_slider
 
 
 def callback_time_slider(app):
@@ -34,12 +35,25 @@ def callback_time_slider(app):
     )
     def inital_time_slice(filepath):
         if not filepath:
-            return "Time Slider [1s]", 10, 1
+            return (
+                "Time Slider [1s]",
+                10,
+                1,
+            )
         if not filepath["data_path"]:
-            return "Time Slider [1 s]", 10, 1
+            return (
+                "Time Slider [1 s]",
+                10,
+                1,
+            )
 
-        nix_file = nixio.File(filepath["data_path"], nixio.FileMode.ReadOnly)
-        data_shape = nix_file.blocks[0].data_arrays["data"].shape[0]
-        section = nix_file.sections["recording"]
-        sample_rate = float(section["samplerate"][0])
-        return "Time Slider [1 s]", data_shape, sample_rate * 0.5
+        ds = utils.data.load_data(**filepath)
+        # nix_file = nixio.File(filepath["data_path"], nixio.FileMode.ReadOnly)
+        # data_shape = nix_file.blocks[0].data_arrays["data"].shape[0]
+        # section = nix_file.sections["recording"]
+        # sample_rate = float(section["samplerate"][0])
+        return (
+            "Time Slider [1 s]",
+            ds.metadata.frames,
+            ds.metadata.samplerate * 0.5,
+        )
