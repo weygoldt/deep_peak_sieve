@@ -203,6 +203,7 @@ classify_peaks /path/to/dataset_peaks -vvv
 - [ ] Outsource the exploration file
 - [ ] Build a decomposer base class for umap/VAE/PCA...
 - [ ] Dataclass in dcc.Storage 
+- [ ] Export to nix file 
 
 ## DONE 🎉
 
