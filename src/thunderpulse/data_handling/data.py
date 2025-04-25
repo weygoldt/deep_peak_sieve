@@ -38,7 +38,7 @@ class Data:
 
 
 def load_data(data_path, save_path, probe_path):
-    wav_files = list(pathlib.Path(data_path).glob("**/*.wav"))
+    wav_files = list(pathlib.Path(data_path).rglob("*.wav"))
 
     if wav_files:
         wav_files = [str(f) for f in wav_files]
