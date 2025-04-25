@@ -87,7 +87,7 @@ def callbacks_traces(app):
 
         if isinstance(channels, list):
             channels = np.array(channels)
-        d = utils.data.laod_data(**filepath)
+        d = utils.data.load_data(**filepath)
         time_display = 1
 
         # probe_frame = nix_file.blocks[0].data_frames["probe_frame"]
@@ -96,9 +96,19 @@ def callbacks_traces(app):
         #     probe_selected_channels,
         #     probe_frame,
         # )
+        # BUG: HARD CODED needs to be dynamic from probe graph
+        # and channel selector
 
-        channel_length = 16
-        channels = np.arange(16)
+        if channels.size == 1:
+            channels = np.append(channels, channels[0])
+        channel_length = np.arange(channels[0], channels[1]).shape[0] + 1
+        if channels[0] == channels[1]:
+            channel_length = 1
+        channels = np.arange(channels[0], channels[1] + 1)
+
+        # channels = np.arange(channels)
+        # channel_length = len(channels)
+
         sliced_data, time_slice = ds.select_data(
             d.data, time_index, time_display, d.metadata.samplerate
         )
