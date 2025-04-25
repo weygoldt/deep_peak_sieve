@@ -1,17 +1,13 @@
 import pathlib
 
-import nixio
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from dash import Input, Output
-from IPython import embed
 from plotly import subplots
 
-import thunderpulse.processing as processing
-import thunderpulse.utils as utils
+from thunderpulse import processing, utils
 
-from . import channel_selection as cs
 from . import data_selection as ds
 
 

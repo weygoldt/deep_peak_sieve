@@ -1,10 +1,9 @@
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
 
 import neo
-from audioio import AudioLoader
-from IPython import embed
 import numpy as np
+from audioio import AudioLoader
 
 from thunderpulse.utils.loggers import get_logger
 

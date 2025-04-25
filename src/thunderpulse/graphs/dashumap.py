@@ -4,9 +4,7 @@ import nixio
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from dash import Input, Output, Patch, ctx
-from dash.exceptions import PreventUpdate
-from IPython import embed
+from dash import Input, Output, ctx
 from shapely import Point, Polygon
 from sklearn.cluster import HDBSCAN
 
@@ -63,14 +61,16 @@ def callbacks_umap(app):
         Input("num_hdb_scan", "value"),
         Input("bt_saveunit", "n_clicks"),
     )
-    def save_unit_from_umap(tabs, filepath, channel, hdb_cluster_size, bt_saveunit):
+    def save_unit_from_umap(
+        tabs, filepath, channel, hdb_cluster_size, bt_saveunit
+    ):
         if tabs:
             if not tabs == "tab_umap":
-                return None
+                return
 
         button = ctx.triggered_id == "bt_saveunit"
         if not button:
-            return None
+            return
 
         nix_file = nixio.File(filepath["data_path"], nixio.FileMode.ReadWrite)
         block = nix_file.blocks[0]
@@ -86,7 +86,7 @@ def callbacks_umap(app):
         try:
             embedding = data_arrays[f"umap_channel_{channel}"]
         except KeyError:
-            return None
+            return
 
         if hdb_cluster_size:
             hdb = HDBSCAN(min_cluster_size=hdb_cluster_size, n_jobs=-1)
@@ -94,7 +94,9 @@ def callbacks_umap(app):
         else:
             labels = embedding[:, 3]
         channel_index = np.where(spike_frame["channel"] == channel)[0]
-        spikes_channel = spike_frame.read_rows(spike_frame["channel"] == channel)
+        spikes_channel = spike_frame.read_rows(
+            spike_frame["channel"] == channel
+        )
         spikes_channel["unit"][: len(labels)] = labels
         spike_frame.write_rows(
             spikes_channel[: len(labels)], channel_index[: len(labels)]
@@ -180,12 +182,19 @@ def callbacks_umap(app):
                 std_lower = saved_selections[key]["std_lower"]
                 mean_wf = saved_selections[key]["mean_wf"]
                 fig = plot_mean_waveforms_from_umap(
-                    fig, time_slice, std_lower, std_upper, mean_wf, color=colors[i]
+                    fig,
+                    time_slice,
+                    std_lower,
+                    std_upper,
+                    mean_wf,
+                    color=colors[i],
                 )
             else:
                 poly = Polygon(current_selection)
                 data_frame = [
-                    d for d in data["points"] if poly.contains(Point(d["x"], d["y"]))
+                    d
+                    for d in data["points"]
+                    if poly.contains(Point(d["x"], d["y"]))
                 ]
 
                 time_slice, std_upper, std_lower, mean_wf = (
@@ -203,7 +212,12 @@ def callbacks_umap(app):
                 saved_selections[key]["std_lower"] = std_lower
                 saved_selections[key]["mean_wf"] = mean_wf
                 fig = plot_mean_waveforms_from_umap(
-                    fig, time_slice, std_lower, std_upper, mean_wf, color=colors[i]
+                    fig,
+                    time_slice,
+                    std_lower,
+                    std_upper,
+                    mean_wf,
+                    color=colors[i],
                 )
 
         fig.update_layout(
@@ -254,7 +268,9 @@ def plot_umap(filepath, channel, hdb_cluster_size):
                 colorbar=dict(
                     title=dict(text="Clusters", side="right"),
                     tickvals=cluster,
-                    ticktext=[str(int(label)) for label in np.unique(embedding[:, 2])],
+                    ticktext=[
+                        str(int(label)) for label in np.unique(embedding[:, 2])
+                    ],
                 ),
             ),
         )
@@ -266,7 +282,9 @@ def plot_umap(filepath, channel, hdb_cluster_size):
         margin=dict(l=0, r=0, t=0, b=0),
         clickmode="event+select",
         showlegend=False,
-        coloraxis=dict(colorbar=dict(len=0.5, yanchor="bottom", xanchor="right")),
+        coloraxis=dict(
+            colorbar=dict(len=0.5, yanchor="bottom", xanchor="right")
+        ),
     )
 
     nix_file.close()
@@ -279,7 +297,9 @@ def plot_segments(
     channel,
 ):
     nix_file = nixio.File(filepath["data_path"], nixio.FileMode.ReadOnly)
-    spike_frame = nix_file.blocks[0].data_frames["spike_times_dataframe_processed"]
+    spike_frame = nix_file.blocks[0].data_frames[
+        "spike_times_dataframe_processed"
+    ]
     colors = px.colors.qualitative.Dark24
     cluster = np.unique(
         spike_frame.read_rows(spike_frame["channel"] == channel)["segment"]
@@ -291,7 +311,9 @@ def plot_segments(
     except KeyError:
         fig = default_umap_figure()
         return fig
-    labels = spike_frame.read_rows(spike_frame["channel"] == channel)["segment"]
+    labels = spike_frame.read_rows(spike_frame["channel"] == channel)[
+        "segment"
+    ]
     num_clusters = cluster.shape[0]
     colorscale_values = np.linspace(0, 1, num_clusters + 1)
     colorscale = []
@@ -322,7 +344,9 @@ def plot_segments(
         margin=dict(l=0, r=0, t=0, b=0),
         clickmode="event+select",
         showlegend=False,
-        coloraxis=dict(colorbar=dict(len=0.5, yanchor="bottom", xanchor="right")),
+        coloraxis=dict(
+            colorbar=dict(len=0.5, yanchor="bottom", xanchor="right")
+        ),
     )
     return fig
 

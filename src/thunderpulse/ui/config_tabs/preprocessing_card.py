@@ -1,5 +1,5 @@
-from dash import html, dcc
 import dash_bootstrap_components as dbc
+from dash import dcc, html
 
 
 def create_preprocessing_card():
@@ -7,7 +7,9 @@ def create_preprocessing_card():
         dbc.CardBody(
             [
                 dbc.Checklist(
-                    options=[{"label": "Apply Common Median Reference", "value": 0}],
+                    options=[
+                        {"label": "Apply Common Median Reference", "value": 0}
+                    ],
                     id="sw_common_reference",
                     switch=True,
                     persistence=True,
@@ -59,7 +61,9 @@ def create_preprocessing_card():
                 html.Br(),
                 html.Br(),
                 dbc.Checklist(
-                    options=[{"label": "Search peak in Current window", "value": 0}],
+                    options=[
+                        {"label": "Search peak in Current window", "value": 0}
+                    ],
                     id="sw_peaks_current_window",
                     switch=True,
                 ),
@@ -132,7 +136,7 @@ def create_preprocessing_card():
                     style={"width": "35%"},
                     persistence=True,
                     persistence_type="local",
-                    disabled=True
+                    disabled=True,
                 ),
                 html.Br(),
                 dbc.Button(
@@ -142,9 +146,10 @@ def create_preprocessing_card():
                     n_clicks=0,
                 ),
                 html.Br(),
-                dbc.Spinner(html.Div(id="spinner_save_preprocessing"), color="info"),
+                dbc.Spinner(
+                    html.Div(id="spinner_save_preprocessing"), color="info"
+                ),
                 html.Br(),
-
                 html.P(
                     children="You switch to the saved processed data with this switch",
                 ),

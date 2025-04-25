@@ -2,12 +2,9 @@ import warnings
 
 import nixio
 import numpy as np
-import scipy.signal as signal
 import umap
-from dash import Input, Output
-from IPython import embed
+from dash import Input
 from joblib import Parallel, delayed
-from numpy.ma.core import zeros_like
 from rich.progress import track
 from sklearn.cluster import HDBSCAN
 
@@ -24,7 +21,9 @@ def callbacks_create_umap_embedding(app):
     def create_wave_form(filepath, n_clicks, higher, lower):
         if n_clicks and n_clicks > 0:
             reducer = umap.UMAP()
-            nix_file = nixio.File(filepath["data_path"], nixio.FileMode.ReadWrite)
+            nix_file = nixio.File(
+                filepath["data_path"], nixio.FileMode.ReadWrite
+            )
             block = nix_file.blocks[0]
             recording = block.data_arrays["processed_data"]
             section = nix_file.sections["recording"]
@@ -107,12 +106,16 @@ def multprocess_umap(filepath, ch, reducer):
         embedding = reducer.fit_transform(wf_processed, ensure_all_finite=True)
         hdb = HDBSCAN(min_cluster_size=25, n_jobs=-1)
         labels = hdb.fit_predict(embedding)
-        segments = spike_frame.read_rows(spike_frame["channel"] == ch)["segment"][
-            : len(labels)
-        ]
-        emb = np.hstack((embedding, labels.reshape(-1, 1), segments.reshape(-1, 1)))
+        segments = spike_frame.read_rows(spike_frame["channel"] == ch)[
+            "segment"
+        ][: len(labels)]
+        emb = np.hstack(
+            (embedding, labels.reshape(-1, 1), segments.reshape(-1, 1))
+        )
     else:
-        segments = spike_frame.read_rows(spike_frame["channel"] == ch)["segment"]
+        segments = spike_frame.read_rows(spike_frame["channel"] == ch)[
+            "segment"
+        ]
         emb = np.hstack(
             (
                 np.zeros((segments.shape[0], 2)) - 1,

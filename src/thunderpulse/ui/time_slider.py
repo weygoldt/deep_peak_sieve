@@ -1,7 +1,6 @@
-import nixio
 from dash import Input, Output, dcc, html
 
-import thunderpulse.utils as utils
+from thunderpulse import utils
 
 
 def create_time_slider():

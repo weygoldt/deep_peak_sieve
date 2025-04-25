@@ -1,4 +1,4 @@
-from scipy.signal import butter, sosfiltfilt, iirnotch, filtfilt
+from scipy.signal import butter, filtfilt, iirnotch, sosfiltfilt
 
 
 def bandpass_filter(data, lowcut, highcut, fs, order=5):
@@ -16,7 +16,6 @@ def bandpass_filter(data, lowcut, highcut, fs, order=5):
 
 
 def notch_filter(data, notch, fs, Q=40, order=5):
-
     # coeffs = butter(
     #     order,
     #     [notch-2, notch+2],

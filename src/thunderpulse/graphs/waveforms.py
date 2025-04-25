@@ -3,7 +3,6 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from dash import Input, Output
-from IPython import embed
 from plotly import subplots
 
 from .channel_selection import select_channels
@@ -117,7 +116,9 @@ def plot_waveforms(
     selection_index = {}
     for ch in channels:
         selection_index[ch] = []
-        wf_selection_pool = block.data_arrays[f"waveform_channel_{ch}"].shape[0]
+        wf_selection_pool = block.data_arrays[f"waveform_channel_{ch}"].shape[
+            0
+        ]
         if wf_selection_pool < wave_num:
             selection_index[ch] = np.arange(wf_selection_pool)
         else:

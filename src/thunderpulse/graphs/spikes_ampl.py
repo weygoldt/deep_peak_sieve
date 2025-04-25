@@ -5,8 +5,6 @@ import plotly.graph_objects as go
 
 # import ruptures as rpt
 from dash import Input, Output
-from IPython import embed
-from joblib import Parallel, delayed
 from plotly import subplots
 
 from . import channel_selection as cs
@@ -77,7 +75,9 @@ def callbacks_spikes_ampl(app):
             probe_frame,
         )
 
-        spike_frame = nix_file.blocks[0].data_frames["spike_times_dataframe_processed"]
+        spike_frame = nix_file.blocks[0].data_frames[
+            "spike_times_dataframe_processed"
+        ]
 
         colors = [*px.colors.qualitative.Light24, *px.colors.qualitative.Vivid]
 
@@ -92,22 +92,30 @@ def callbacks_spikes_ampl(app):
         ).flatten()
 
         filterd_ch_all = [fch for fch in data_arrays if fch.type == "ampl"]
-        all_seps = [fch for fch in data_arrays if "seperations_channel" in fch.name]
+        all_seps = [
+            fch for fch in data_arrays if "seperations_channel" in fch.name
+        ]
 
         all_seps_flatten = []
         for ch in np.arange(32):
             seperation_index_channel = all_seps[ch][:]
             spikes_channel = (
-                spike_frame.read_rows(spike_frame["channel"] == ch)["spike_index"]
+                spike_frame.read_rows(spike_frame["channel"] == ch)[
+                    "spike_index"
+                ]
                 / sample_rate
             )
             if not np.all(seperation_index_channel) > 0:
                 continue
             if seperation_index_channel[-1] >= spikes_channel.size:
                 seperation_index_channel[-1] = spikes_channel.size - 1
-                all_seps_flatten.extend(spikes_channel[seperation_index_channel])
+                all_seps_flatten.extend(
+                    spikes_channel[seperation_index_channel]
+                )
             else:
-                all_seps_flatten.extend(spikes_channel[seperation_index_channel])
+                all_seps_flatten.extend(
+                    spikes_channel[seperation_index_channel]
+                )
 
         all_seps_flatten = np.sort(all_seps_flatten)
 
@@ -118,9 +126,13 @@ def callbacks_spikes_ampl(app):
         fig.add_traces(
             [
                 go.Scattergl(
-                    x=spike_frame.read_rows(spike_frame["channel"] == i)["spike_index"]
+                    x=spike_frame.read_rows(spike_frame["channel"] == i)[
+                        "spike_index"
+                    ]
                     / sample_rate,
-                    y=spike_frame.read_rows(spike_frame["channel"] == i)["amplitude"],
+                    y=spike_frame.read_rows(spike_frame["channel"] == i)[
+                        "amplitude"
+                    ],
                     name=f"{i}",
                     mode="markers",
                     marker_color=colors[i],
@@ -134,13 +146,15 @@ def callbacks_spikes_ampl(app):
         fig.add_traces(
             [
                 go.Scattergl(
-                    x=spike_frame.read_rows(spike_frame["channel"] == i)["spike_index"]
+                    x=spike_frame.read_rows(spike_frame["channel"] == i)[
+                        "spike_index"
+                    ]
                     / sample_rate,
                     y=filterd_ch[ch][:],
                     name=f"{i}",
                     line_color="white",
                 )
-                for i, ch in zip(channels, idex_ch)
+                for i, ch in zip(channels, idex_ch, strict=False)
             ],
             rows=list(np.arange(channel_length) + 1),
             cols=[1] * channel_length,
@@ -153,14 +167,20 @@ def callbacks_spikes_ampl(app):
             if not np.all(seps_channel) > 0:
                 continue
             y_min = np.min(
-                spike_frame.read_rows(spike_frame["channel"] == ch)["amplitude"]
+                spike_frame.read_rows(spike_frame["channel"] == ch)[
+                    "amplitude"
+                ]
             )
             y_max = np.max(
-                spike_frame.read_rows(spike_frame["channel"] == ch)["amplitude"]
+                spike_frame.read_rows(spike_frame["channel"] == ch)[
+                    "amplitude"
+                ]
             )
 
             spikes_channel = (
-                spike_frame.read_rows(spike_frame["channel"] == ch)["spike_index"]
+                spike_frame.read_rows(spike_frame["channel"] == ch)[
+                    "spike_index"
+                ]
                 / sample_rate
             )
             if seps_channel[-1] >= spikes_channel.shape[0]:

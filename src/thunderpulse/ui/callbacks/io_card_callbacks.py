@@ -1,7 +1,6 @@
 import pathlib
 
 from dash import Input, Output
-from IPython import embed
 from probeinterface import read_probeinterface
 
 
@@ -17,8 +16,7 @@ def callbacks_io(app):
         datapath = pathlib.Path(datapath)
         if datapath.exists():
             return False, True
-        else:
-            return True, False
+        return True, False
 
     @app.callback(
         Output("savepath", "invalid"),
@@ -31,8 +29,7 @@ def callbacks_io(app):
         savepath = pathlib.Path(savepath)
         if savepath.exists():
             return False, True
-        else:
-            return True, False
+        return True, False
 
     @app.callback(
         Output("probepath", "invalid"),
@@ -49,5 +46,4 @@ def callbacks_io(app):
             except ValueError:
                 return True, False
             return False, True
-        else:
-            return True, False
+        return True, False

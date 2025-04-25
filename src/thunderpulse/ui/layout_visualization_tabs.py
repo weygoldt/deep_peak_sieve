@@ -1,5 +1,5 @@
-from dash import dcc
 import dash_bootstrap_components as dbc
+from dash import dcc
 
 
 def create_visualization_tabs():
@@ -64,6 +64,6 @@ def create_visualization_tabs():
                 tab_id="tab_umap",
             ),
         ],
-        id='vis_tabs',
+        id="vis_tabs",
     )
     return tabs

@@ -173,7 +173,7 @@ classify_peaks /path/to/dataset_peaks -vvv
 
 - [ ] [Patrick] Add logging to the dash application
 - [ ] [Alex] Seperate the dash callbacks to the ui folder
-- [ ] [Patrick] Build a decomposer base class for umap/VAE/PCA...
+- [ ] [Patrick] Build an embedder base class for umap/VAE/PCA...
 - [ ] [Alex] Dataclass in dcc.Storage 
 - [ ] Export to nix file 
 - [ ] Build GUI elements to save configs to `scipy.signal.find_peaks`
