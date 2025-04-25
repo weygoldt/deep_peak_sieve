@@ -28,7 +28,7 @@ class Data:
     paths: Paths
 
 
-def laod_data(data_path, save_path, probe_path):
+def load_data(data_path, save_path, probe_path):
     wav_files = list(pathlib.Path(data_path).glob("**/*.wav"))
 
     if wav_files:
