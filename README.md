@@ -198,6 +198,12 @@ classify_peaks /path/to/dataset_peaks -vvv
 - [ ] Generalize to mono- and polyphasic peaks  
       _Currently, only monophonic peaks are well-supported. Polyphasic peaks require handling the order of positive and negative excursions (see `deep_peak_sieve/prepro/collect_peaks.py`)._
 
+- [ ] Add logging to the dash application
+- [ ] Seperate the dash callbacks to the ui folder
+- [ ] Outsource the exploration file
+- [ ] Build a decomposer base class for umap/VAE/PCA...
+- [ ] Dataclass in dcc.Storage 
+
 ## DONE 🎉
 
 - [x] Build testdata set with spikesorting data and eel/pulsefish data
