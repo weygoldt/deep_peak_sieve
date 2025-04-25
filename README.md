@@ -1,16 +1,44 @@
-# Dashboard Merge TODO:
-
-- [ ] Build testdata set with spikesorting data and eel/pulsefish data
-- [ ] Build GUI elements to save configs to `scipy.signal.find_peaks`
-- [ ] Build data loading classes to unify nix data and wav files
 
 
 # ThunderPulse
 
 **ThunderPulse** is a toolbox to work with peaks or pulses of different
-emitters that change position in multichannel biological signals.
+emitters that may change position in multichannel biological signals.
 
 ---
+
+## Mission 🧪
+
+Whether you have electrophysiological recordings from multiple extracellular
+electrodes, or you record the discharges of pulsing electric fish on grids
+of electrodes, you have to deal with the same problems:
+
+1. **Peak Detection**  
+   Detect peaks in the data, ideally with a very low threshold *and* with
+   a very low false positive rate.
+
+2. **Peak Emitter Assignment**
+   Action potentials can come from different cells and electric pulses
+   can be produced by different fish. So usually, we need to somehow
+   guess which peak comes from which one of an *unknown number* of emitters.
+
+3. **Emitter Tracking**
+   Fish can obviously move, but cells might as well: The animal might move,
+   or the recording electrode might drift. So we need to be able to
+   track the position of the emitters over time.
+
+Because these problems are so similar, our goal is to build a toolbox
+that can be used to solve all of them. So what is our plan to solve
+these problems?
+
+1. **Peak Detection**  
+   We will build a dashboard to fine-tune the peak detection parameters
+   with visual feedback. Then, peaks can be manualy labeled as "signal"
+   or "noise". The labeled peaks will be used to train a classifier
+   that can be used to classify all detected peaks. The output should
+   be a dataset that contains next to all (even small) peaks in the dataset
+   without (or very few) false positives.
+
 
 ## Motivation 💡
 
@@ -156,6 +184,8 @@ classify_peaks /path/to/dataset_peaks -vvv
 
 ## TODO ✅
 
+- [ ] Build GUI elements to save configs to `scipy.signal.find_peaks`
+- [ ] Build data loading classes to unify nix data and wav files
 - [ ] Add print statement for overall labeling progress
 - [ ] We need a dashboard (or similar) to explore signal to tune peak detection parameters: 
    - Should support peak detection parameters and filtering parameters (savgol, bandpass, etc.)
@@ -170,6 +200,7 @@ classify_peaks /path/to/dataset_peaks -vvv
 
 ## DONE 🎉
 
+- [x] Build testdata set with spikesorting data and eel/pulsefish data
 - [x] Add garbage collection to `collect_peaks.py`, when running for days the ram usage increases for some reason
 - [x] Add user input to the sampler to prompt whether to overwrite existing samples file
 - [x] Add quit option to the labeler GUI to allow for safe quitting
