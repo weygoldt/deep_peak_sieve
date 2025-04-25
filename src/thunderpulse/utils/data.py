@@ -1,3 +1,4 @@
+import json
 import pathlib
 from dataclasses import dataclass
 
@@ -20,12 +21,20 @@ class Paths:
     save_path: str | pathlib.Path
     layout_path: str | pathlib.Path
 
+@dataclass
+class SensoryArray:
+    channels: list[int]
+    x: list[float]
+    y: list[float]
+    z: list[float]
+
 
 @dataclass
 class Data:
     data: AudioLoader | neo.OpenEphysBinaryIO
     metadata: Metadata
     paths: Paths
+    sensoryarray: SensoryArray
 
 
 def load_data(data_path, save_path, probe_path):
@@ -34,6 +43,10 @@ def load_data(data_path, save_path, probe_path):
     if wav_files:
         wav_files = [str(f) for f in wav_files]
         d = AudioLoader(wav_files)
+        try:
+            seonsory_array =json.load(probe_path).read()
+        except json.JSONDecodeError:
+            print("Sensory Array cannot decoded as json")
         data_c = Data(
             data=d,
             metadata=Metadata(d.rate, d.channels, d.frames / d.rate, d.frames),
