@@ -1,3 +1,5 @@
+"""Main loop to parse large datasets and collect peaks."""
+
 import gc
 from datetime import timedelta
 from pathlib import Path
@@ -11,7 +13,6 @@ from IPython import embed
 from scipy.interpolate import interp1d
 from scipy.signal import find_peaks, savgol_filter
 
-from thunderpulse.collection.filters import bandpass_filter
 from thunderpulse.utils.datasets import load_raw_data, save_numpy
 from thunderpulse.utils.loggers import (
     configure_logging,
@@ -24,18 +25,14 @@ log = get_logger(__name__)
 
 
 def pretty_duration_humanize(seconds: float) -> str:
-    """
-    Return a human-friendly string of a duration given in seconds.
-    """
+    """Return a human-friendly string of a duration given in seconds."""
     return humanize.naturaldelta(timedelta(seconds=seconds))
 
 
-def initialize_dataset(path: Path):
-    """
-    Prepare an empty structure into which extracted peaks and metadata will be placed.
-    """
+def initialize_dataset() -> dict:
+    """Prepare structure into which extracted peaks/metadata will be placed."""
     log.debug("Creating empty dataset to save extracted peaks")
-    dataset = {
+    return {
         "peaks": [],
         "channels": [],
         "amplitudes": [],
@@ -43,7 +40,6 @@ def initialize_dataset(path: Path):
         "start_stop_index": [],
         "rate": None,
     }
-    return dataset
 
 
 def apply_filter(
@@ -58,16 +54,6 @@ def apply_filter(
             block.T,
             window_length=params["window_length"],
             polyorder=params["polyorder"],
-            # params["window_length"],
-            # params["polyorder"],
-        ).T
-    if params["mode"] == "bandpass":
-        log.debug("Applying bandpass filter")
-        return bandpass_filter(
-            block.T,
-            lowcut=params["lowcut"],
-            highcut=params["highcut"],
-            sample_rate=sample_rate,
         ).T
     if params["mode"] == "none":
         log.debug("No filtering applied")
@@ -282,7 +268,7 @@ def process_file(
         """
     )
 
-    dataset = initialize_dataset(path)
+    dataset = initialize_dataset()
     collected_peak_counter = 0
     dataset_counter = 0
 
