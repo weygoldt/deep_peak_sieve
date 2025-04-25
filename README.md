@@ -39,21 +39,6 @@ these problems?
    be a dataset that contains next to all (even small) peaks in the dataset
    without (or very few) false positives.
 
-
-## Motivation 💡
-
-
-
-<!-- When working with biological signals where peaks are the main feature of -->
-<!-- interest, we are often faced with the tradeoff between a high false positive -->
-<!-- rate (detecting noise as peaks) and a high false negative rate (missing true -->
-<!-- peaks but detecting less noise). The lower we set a threshold, the more true -->
-<!-- peaks we get but also the more noise we detect. This is especially problematic -->
-<!-- when the signal-to-noise ratio is low, as it can lead to a large number of -->
-<!-- false positives and make it difficult to identify true peaks. To fix this, we -->
-<!-- need to be able to distinguish between true peaks and noise in the peaks we -->
-<!-- detect. -->
-
 ## Overview 🔎
 
 This project aims to provide a peak detection algorithm that is robust to noise
@@ -184,6 +169,12 @@ classify_peaks /path/to/dataset_peaks -vvv
 
 ## TODO ✅
 
+- [ ] Add logging to the dash application
+- [ ] Seperate the dash callbacks to the ui folder
+- [ ] Outsource the exploration file
+- [ ] Build a decomposer base class for umap/VAE/PCA...
+- [ ] Dataclass in dcc.Storage 
+- [ ] Export to nix file 
 - [ ] Build GUI elements to save configs to `scipy.signal.find_peaks`
 - [ ] Build data loading classes to unify nix data and wav files
 - [ ] Add print statement for overall labeling progress
@@ -197,13 +188,6 @@ classify_peaks /path/to/dataset_peaks -vvv
 - [ ] Implement the latent space sampling strategy, currently we just do stratified random sampling.
 - [ ] Generalize to mono- and polyphasic peaks  
       _Currently, only monophonic peaks are well-supported. Polyphasic peaks require handling the order of positive and negative excursions (see `deep_peak_sieve/prepro/collect_peaks.py`)._
-
-- [ ] Add logging to the dash application
-- [ ] Seperate the dash callbacks to the ui folder
-- [ ] Outsource the exploration file
-- [ ] Build a decomposer base class for umap/VAE/PCA...
-- [ ] Dataclass in dcc.Storage 
-- [ ] Export to nix file 
 
 ## DONE 🎉
 
