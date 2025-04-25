@@ -1,8 +1,6 @@
 import pathlib
 
 from dash import Input, Output
-from IPython import embed
-from probeinterface import read_probeinterface
 
 
 def callbacks_io(app):
@@ -44,10 +42,5 @@ def callbacks_io(app):
             return True, False
         probepath = pathlib.Path(probepath)
         if probepath.exists() and probepath.is_file():
-            try:
-                probe = read_probeinterface(probepath)
-            except ValueError:
-                return True, False
             return False, True
-        else:
-            return True, False
+        return True, False
