@@ -169,19 +169,18 @@ classify_peaks /path/to/dataset_peaks -vvv
 
 ## TODO ✅
 
-- [ ] Add logging to the dash application
-- [ ] Seperate the dash callbacks to the ui folder
-- [ ] Outsource the exploration file
-- [ ] Build a decomposer base class for umap/VAE/PCA...
-- [ ] Dataclass in dcc.Storage 
+### Short-Term
+
+- [ ] [Alex] Use the `get_file_list` function to get the wav files and raise error if returned list is nested to prevent opening too many files at once (otherwise this crashes the `wavefile` library that the `AudioLoader` uses as backend)
+- [ ] [Patrick] Add logging to the dash application
+- [ ] [Alex] Seperate the dash callbacks to the ui folder
+- [ ] [Patrick] Build a decomposer base class for umap/VAE/PCA...
+- [ ] [Alex] Dataclass in dcc.Storage 
 - [ ] Export to nix file 
 - [ ] Build GUI elements to save configs to `scipy.signal.find_peaks`
-- [ ] Build data loading classes to unify nix data and wav files
-- [ ] Add print statement for overall labeling progress
-- [ ] We need a dashboard (or similar) to explore signal to tune peak detection parameters: 
-   - Should support peak detection parameters and filtering parameters (savgol, bandpass, etc.)
-   - Sliders to tune parameters
-   - Output should be written to a config file that is then used by collect_peaks
+
+### Long-Term
+
 - [ ] Implement min/max peak halfwidth
 - [ ] Implement training on all labeled samples, not just the ones present in the labels.json file
 - [ ] Implement active learnign. Currently, we just label -> train -> classify. For that, checkout python package [baal](https://github.com/baal-org/baal?tab=readme-ov-file)
@@ -191,6 +190,9 @@ classify_peaks /path/to/dataset_peaks -vvv
 
 ## DONE 🎉
 
+- [x] Add print statement for overall labeling progress
+- [x] [Alex] Build data loading classes to unify nix data and wav files
+- [x] [Patrick] Outsource the exploration file
 - [x] Build testdata set with spikesorting data and eel/pulsefish data
 - [x] Add garbage collection to `collect_peaks.py`, when running for days the ram usage increases for some reason
 - [x] Add user input to the sampler to prompt whether to overwrite existing samples file
