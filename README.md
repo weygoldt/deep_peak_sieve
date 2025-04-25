@@ -171,7 +171,6 @@ classify_peaks /path/to/dataset_peaks -vvv
 
 ### Short-Term
 
-- [ ] [Alex] Use the `get_file_list` function to get the wav files and raise error if returned list is nested to prevent opening too many files at once (otherwise this crashes the `wavefile` library that the `AudioLoader` uses as backend)
 - [ ] [Patrick] Add logging to the dash application
 - [ ] [Alex] Seperate the dash callbacks to the ui folder
 - [ ] [Patrick] Build a decomposer base class for umap/VAE/PCA...
@@ -190,6 +189,7 @@ classify_peaks /path/to/dataset_peaks -vvv
 
 ## DONE 🎉
 
+- [x] [Patrick] Use the `get_file_list` function to get the wav files and raise error if returned list is nested to prevent opening too many files at once (otherwise this crashes the `wavefile` library that the `AudioLoader` uses as backend)
 - [x] Add print statement for overall labeling progress
 - [x] [Alex] Build data loading classes to unify nix data and wav files
 - [x] [Patrick] Outsource the exploration file
