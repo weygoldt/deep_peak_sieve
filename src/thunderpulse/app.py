@@ -71,7 +71,7 @@ def main():
     ui.channel_slider.callback_channel_slider(app)
     ui.time_slider.callback_time_slider(app)
 
-    processing.io.processing_io_callbacks(app)
+    # ui.callbacks..processing_io_callbacks(app)
     processing.save_processing.callback_save_processing_channels(app)
     processing.waveforms.callbacks_create_waveforms(app)
     processing.calc_umap.callbacks_create_umap_embedding(app)
