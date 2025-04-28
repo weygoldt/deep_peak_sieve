@@ -9,12 +9,11 @@ import seaborn as sns
 import typer
 from audioio.audioloader import AudioLoader
 
-from thunderpulse.style import cm, set_dark_style
+from thunderpulse.assets.style import cm, set_dark_style
 from thunderpulse.utils.loggers import configure_logging, get_logger
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
 log = get_logger(__name__)
-# set_light_style()
 set_dark_style()
 
 

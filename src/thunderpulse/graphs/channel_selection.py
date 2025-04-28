@@ -1,7 +1,6 @@
 import nixio
 import numpy as np
 import numpy.typing as npt
-from IPython import embed
 
 
 def select_channels(

@@ -1,8 +1,9 @@
-import numpy as np
 import nixio
+import numpy as np
+import plotly.graph_objects as go
 from dash import Input, Output, Patch
 
-import plotly.graph_objects as go
+
 def default_probe_figure():
     fig = go.Figure(
         data=go.Scattergl(),
@@ -17,7 +18,6 @@ def default_probe_figure():
     return fig
 
 
-
 def callbacks_probe(app):
     @app.callback(
         Output("probe", "figure"),
@@ -25,7 +25,6 @@ def callbacks_probe(app):
         Input("channel_range_slider", "value"),
     )
     def plot_probe(filepaths, channels):
-
         if not filepaths:
             fig = default_probe_figure()
             return fig
@@ -41,15 +40,17 @@ def callbacks_probe(app):
         if np.array(channels).size > 2:
             patched_figure = Patch()
             colors = np.array(["blue"] * probe_frame.shape[0])
-            colors[sorted_probeframe_y[np.arange(channels[0], channels[-1] + 1)]] = (
-                "red"
-            )
+            colors[
+                sorted_probeframe_y[np.arange(channels[0], channels[-1] + 1)]
+            ] = "red"
             patched_figure["data"][0]["marker"]["color"] = colors.tolist()
 
             return patched_figure
 
         colors = np.array(["blue"] * probe_frame.shape[0])
-        colors[sorted_probeframe_y[np.arange(channels[0], channels[1] + 1)]] = "red"
+        colors[
+            sorted_probeframe_y[np.arange(channels[0], channels[1] + 1)]
+        ] = "red"
         fig = go.Figure(
             data=go.Scattergl(
                 x=probe_frame["x"],
@@ -60,7 +61,10 @@ def callbacks_probe(app):
                 marker_sizemode="area",
                 hoverinfo="text",
                 hovertemplate="<b>%{text}</b>",
-                text=[f"Channel index {int(i)-1}" for i in probe_frame["contact_ids"]],
+                text=[
+                    f"Channel index {int(i) - 1}"
+                    for i in probe_frame["contact_ids"]
+                ],
             ),
         )
         fig.update_layout(

@@ -1,10 +1,8 @@
 import dash_bootstrap_components as dbc
 from dash import Dash, dcc, html
 
-import thunderpulse.graphs as graphs
-import thunderpulse.processing as processing
 # import thunderpulse.tables as tables
-import thunderpulse.ui as ui
+from thunderpulse import graphs, processing, ui
 
 
 def main():
@@ -16,7 +14,9 @@ def main():
     channel_slider = ui.channel_slider.create_channel_slider()
     time_slider = ui.time_slider.create_time_slider()
     layout_graph_probe = ui.layout_probe_graph.create_layout_probe_graph()
-    visualization_tabs = ui.layout_visualization_tabs.create_visualization_tabs()
+    visualization_tabs = (
+        ui.layout_visualization_tabs.create_visualization_tabs()
+    )
     config_tabs = ui.layout_config_tabs.create_config_tabs()
 
     app.layout = dbc.Container(

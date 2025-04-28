@@ -19,8 +19,7 @@ def callbacks_io(app: Dash) -> None:
         datapath = pathlib.Path(datapath)
         if datapath.exists():
             return False, True
-        else:
-            return True, False
+        return True, False
 
     @app.callback(
         Output("savepath", "invalid"),
@@ -33,8 +32,7 @@ def callbacks_io(app: Dash) -> None:
         savepath = pathlib.Path(savepath)
         if savepath.exists():
             return False, True
-        else:
-            return True, False
+        return True, False
 
     @app.callback(
         Output("probepath", "invalid"),

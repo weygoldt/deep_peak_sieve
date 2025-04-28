@@ -3,11 +3,10 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from dash import Input, Output
-from IPython import embed
 from plotly import subplots
 from scipy.signal import welch
 
-import thunderpulse.processing as processing
+from thunderpulse import processing
 
 from . import channel_selection as cs
 from . import data_selection as ds

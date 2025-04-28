@@ -5,13 +5,15 @@ import nixio
 import numpy as np
 import polars as pl
 import quantities as pq
-from IPython import embed
 from probeinterface.io import read_probeinterface
 from rich.progress import track
 
 
 def write_nix_file(
-    path: pathlib.Path, savepath: pathlib.Path, probe_path: pathlib.Path, bt_overwrite
+    path: pathlib.Path,
+    savepath: pathlib.Path,
+    probe_path: pathlib.Path,
+    bt_overwrite,
 ):
     try:
         dataset = neo.OpenEphysBinaryIO(path).read(lazy=True)
@@ -34,10 +36,15 @@ def write_nix_file(
         return None
 
     section = nix_file.create_section("recording", type_="recording_metadata")
-    probe_section = section.create_section("probe", type_="probeinterface.Probe")
+    probe_section = section.create_section(
+        "probe", type_="probeinterface.Probe"
+    )
     section.create_property(
         "samplerate",
-        [str(data_array.sampling_rate.magnitude), str(data_array.sampling_rate.units)],
+        [
+            str(data_array.sampling_rate.magnitude),
+            str(data_array.sampling_rate.units),
+        ],
     )
     section.create_property("channels", str(data_array.shape[1]))
 
@@ -57,7 +64,9 @@ def write_nix_file(
             probe_value = p[k]
 
             if isinstance(probe_value, dict):
-                subdict = probe_section.create_section(k, type_="probeinterface.Probe")
+                subdict = probe_section.create_section(
+                    k, type_="probeinterface.Probe"
+                )
                 for subkey in probe_value:
                     subdict.create_property(subkey, probe_value[subkey])
             else:
@@ -71,10 +80,12 @@ def write_nix_file(
     )
     chunk_size = 80 * pq.s
     start_data_array = data_array.t_start
-    chunked_data = np.arange(data_array.t_start, data_array.t_stop, chunk_size) * pq.s
+    chunked_data = (
+        np.arange(data_array.t_start, data_array.t_stop, chunk_size) * pq.s
+    )
 
     for start, stop in track(
-        zip(chunked_data[:-1], chunked_data[1:]),
+        zip(chunked_data[:-1], chunked_data[1:], strict=False),
         description="Saving Raw Data",
         total=len(chunked_data),
     ):
@@ -103,9 +114,9 @@ def write_nix_file(
     nix_data_array[-last_chunk_index:] = data_chunk
     # print(f"Processing Last Chunk {i} / {chunked_data.shape[0] - 1}")
 
-    assert nix_data_array.shape == data_array.shape, (
-        "nix data array does not match neo data array"
-    )
+    assert (
+        nix_data_array.shape == data_array.shape
+    ), "nix data array does not match neo data array"
 
     nix_file.close()
     return nix_file_path

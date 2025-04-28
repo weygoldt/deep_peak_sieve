@@ -1,9 +1,8 @@
 import nixio
 import numpy as np
 from dash import Input, Output, dcc, html
-from IPython import embed
 
-import thunderpulse.utils as utils
+from thunderpulse import utils
 
 
 def create_channel_slider():
@@ -53,6 +52,7 @@ def callback_channel_slider(app):
             for id in zip(
                 np.arange(ds.metadata.channels),
                 np.arange(ds.metadata.channels),
+                strict=False,
             )
         }
         return ds.metadata.channels - 1, marks
@@ -63,27 +63,22 @@ def callback_channel_slider(app):
         Input("filepath", "data"),
     )
     def update_channels(selected_data, filepaths):
-        if not selected_data:
+        if not selected_data or not selected_data["points"]:
             return [0, 15]
-        elif not selected_data["points"]:
-            return [0, 15]
-        else:
-            nix_file = nixio.File(
-                filepaths["data_path"], nixio.FileMode.ReadOnly
-            )
-            probe_frame = nix_file.blocks[0].data_frames["probe_frame"]
-            sorted_after_y_pos = np.argsort(probe_frame["y"])
-            channels = []
-            for items in selected_data["points"]:
-                channel_id = items["text"].split(" ")[-1]
-                channels.append(int(channel_id))
+        nix_file = nixio.File(filepaths["data_path"], nixio.FileMode.ReadOnly)
+        probe_frame = nix_file.blocks[0].data_frames["probe_frame"]
+        sorted_after_y_pos = np.argsort(probe_frame["y"])
+        channels = []
+        for items in selected_data["points"]:
+            channel_id = items["text"].split(" ")[-1]
+            channels.append(int(channel_id))
 
-            order = {key: i for i, key in enumerate(sorted_after_y_pos)}
-            channels = np.array(sorted(channels, key=lambda d: order[d]))
+        order = {key: i for i, key in enumerate(sorted_after_y_pos)}
+        channels = np.array(sorted(channels, key=lambda d: order[d]))
 
-            start_channel = np.where(channels[0] == sorted_after_y_pos)[0]
-            stop_channel = np.where(channels[-1] == sorted_after_y_pos)[0]
+        start_channel = np.where(channels[0] == sorted_after_y_pos)[0]
+        stop_channel = np.where(channels[-1] == sorted_after_y_pos)[0]
 
-            channels = np.arange(start_channel.item(), stop_channel.item() + 1)
-            nix_file.close()
-            return channels
+        channels = np.arange(start_channel.item(), stop_channel.item() + 1)
+        nix_file.close()
+        return channels

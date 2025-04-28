@@ -1,6 +1,1 @@
-from . import dashumap
-from . import waveforms
-from . import traces
-from . import probe
-from . import psd
-from . import spikes_ampl
+from . import dashumap, probe, psd, spikes_ampl, traces, waveforms

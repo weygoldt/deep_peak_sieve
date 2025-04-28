@@ -1,8 +1,10 @@
 import dash_bootstrap_components as dbc
-from .config_tabs.io_card import create_io_card
-from .config_tabs.preprocessing_card import create_preprocessing_card
-from .config_tabs.peak_table_card import create_peak_table_card
+
 from .config_tabs.cluster_card import create_cluster_card
+from .config_tabs.io_card import create_io_card
+from .config_tabs.peak_table_card import create_peak_table_card
+from .config_tabs.preprocessing_card import create_preprocessing_card
+
 # from .config_tabs.autoencoder_card import creat
 
 
@@ -18,7 +20,9 @@ def create_config_tabs():
             [
                 dbc.Tab(io_card, label="IO", tab_id="io"),
                 dbc.Tab(
-                    preprocessing_card, label="Preprocessing", tab_id="preprocessing"
+                    preprocessing_card,
+                    label="Preprocessing",
+                    tab_id="preprocessing",
                 ),
                 dbc.Tab(peak_table_card, label="Peaks", tab_id="peaks"),
                 dbc.Tab(cluster_card, label="Clustering", tab_id="clustering"),

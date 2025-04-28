@@ -1,5 +1,5 @@
-from dash import dash_table
 import dash_bootstrap_components as dbc
+from dash import dash_table
 
 
 def create_peak_table_card():
@@ -15,7 +15,10 @@ def create_peak_table_card():
                         "backgroundColor": "rgb(30, 30, 30)",
                         "color": "white",
                     },
-                    style_data={"backgroundColor": "rgb(50, 50, 50)", "color": "white"},
+                    style_data={
+                        "backgroundColor": "rgb(50, 50, 50)",
+                        "color": "white",
+                    },
                     style_as_list_view=True,
                     sort_action="custom",
                     sort_mode="single",

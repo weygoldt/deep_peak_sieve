@@ -1,12 +1,12 @@
 import nixio
 import numpy as np
-# import ruptures as rpt
-import scipy.signal as signal
 from dash import Input, Output
-from IPython import embed
 from joblib import Parallel, delayed
 from nixio.exceptions import DuplicateName
 from rich.progress import track
+
+# import ruptures as rpt
+from scipy import signal
 
 from . import peak_detection, preprocessing
 
@@ -64,16 +64,18 @@ def callback_save_processing_channels(app):
         peaks = []
         for ch in track(channels, description="Saving Channel"):
             sliced_recording = recording[:, ch]
-            sliced_recording = preprocessing.preprocessing_current_slice_save_to_disk(
-                sliced_recording,
-                sample_rate,
-                sw_bandpass,
-                low,
-                high,
-                sw_common_ref,
-                common_ref,
-                sw_notch,
-                notch,
+            sliced_recording = (
+                preprocessing.preprocessing_current_slice_save_to_disk(
+                    sliced_recording,
+                    sample_rate,
+                    sw_bandpass,
+                    low,
+                    high,
+                    sw_common_ref,
+                    common_ref,
+                    sw_notch,
+                    notch,
+                )
             )
             processed_array[:, ch] = sliced_recording
 
@@ -92,8 +94,10 @@ def callback_save_processing_channels(app):
         peaks = np.sort(peaks)
         channel_data_frame.append(peaks)
 
-        peaks_array, exclude_peaks = peak_detection.exclude_peaks_with_distance(
-            peaks, probe_frame, exclude_radius
+        peaks_array, exclude_peaks = (
+            peak_detection.exclude_peaks_with_distance(
+                peaks, probe_frame, exclude_radius
+            )
         )
 
         try:
@@ -147,7 +151,9 @@ def callback_save_processing_channels(app):
                 data=all_seps[ch],
             )
 
-        all_seps = [fch for fch in data_arrays if "seperations_channel" in fch.name]
+        all_seps = [
+            fch for fch in data_arrays if "seperations_channel" in fch.name
+        ]
         filterd_ch_all = [fch for fch in data_arrays if fch.type == "ampl"]
         end_rec = recording.shape[0] / sample_rate
 
@@ -180,14 +186,16 @@ def callback_save_processing_channels(app):
                 seps = np.delete(seps, -1)
                 seps = np.insert(seps, len(seps), end_rec)
 
-            for s, (lower, upper) in enumerate(zip(seps[:-1], seps[1:])):
+            for s, (lower, upper) in enumerate(
+                zip(seps[:-1], seps[1:], strict=False)
+            ):
                 peaks_segment = peaks_ch[
                     (peaks_ch["spike_index"] / sample_rate >= lower)
                     & (peaks_ch["spike_index"] / sample_rate < upper)
                 ]
-                peaks_segments[i : i + peaks_segment.shape[0]]["spike_index"] = (
-                    peaks_segment["spike_index"]
-                )
+                peaks_segments[i : i + peaks_segment.shape[0]][
+                    "spike_index"
+                ] = peaks_segment["spike_index"]
                 peaks_segments[i : i + peaks_segment.shape[0]]["amplitude"] = (
                     peaks_segment["amplitude"]
                 )
@@ -291,7 +299,9 @@ def callback_save_processing(app):
             if c == 0:
                 processed_array[start:stop] = sliced_recording
             else:
-                processed_array[start + overlap : stop] = sliced_recording[overlap:]
+                processed_array[start + overlap : stop] = sliced_recording[
+                    overlap:
+                ]
             i += 1
 
         print(f"Processing Last Chunk {i}")
@@ -299,7 +309,12 @@ def callback_save_processing(app):
         sliced_recording = recording[-last_chunk_index:]
 
         sliced_recording = preprocessing.preprocessing_current_slice(
-            sliced_recording, sample_rate, sw_bandpass, low, high, sw_common_ref
+            sliced_recording,
+            sample_rate,
+            sw_bandpass,
+            low,
+            high,
+            sw_common_ref,
         )
         processed_array[-last_chunk_index:] = sliced_recording
 
@@ -388,8 +403,7 @@ def create_empty_nix(block, recording, channels):
 def convolve_channel(amplitudes, kernel):
     if amplitudes.size > 0:
         return signal.convolve(amplitudes, kernel, mode="same")
-    else:
-        return amplitudes
+    return amplitudes
 
 
 def mean_filter(spike_frame, window_size, n_channels):
@@ -397,7 +411,8 @@ def mean_filter(spike_frame, window_size, n_channels):
     filtered_channels = {}
     res = Parallel(n_jobs=-1)(
         delayed(convolve_channel)(
-            spike_frame.read_rows(spike_frame["channel"] == ch)["amplitude"], window
+            spike_frame.read_rows(spike_frame["channel"] == ch)["amplitude"],
+            window,
         )
         for ch in n_channels
     )
@@ -410,7 +425,6 @@ def calc_seperations(ch_data):
     if np.array(ch_data.size) > 200:
         # algo_c = rpt.KernelCPD(kernel="linear", min_size=50).fit(ch_data)
         # res = algo_c.predict(pen=8000)
-        
+
         return [0]
-    else:
-        return [0]
+    return [0]
