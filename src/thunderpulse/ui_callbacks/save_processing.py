@@ -8,7 +8,8 @@ from rich.progress import track
 # import ruptures as rpt
 from scipy import signal
 
-from . import peak_detection, preprocessing
+from thunderpulse.classification import peak_detection
+from thunderpulse.data_handling import preprocessing
 
 
 def callback_save_processing_channels(app):
