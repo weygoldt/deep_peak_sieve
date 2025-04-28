@@ -1,8 +1,7 @@
 from . import (
-    callbacks,
     channel_slider,
-    layout_config_tabs,
-    layout_probe_graph,
-    layout_visualization_tabs,
+    config_tabs,
+    probe_graph,
     time_slider,
+    visualization_tabs,
 )
