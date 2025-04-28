@@ -1,12 +1,16 @@
 import pathlib
 
+from IPython import embed
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from dash import Input, Output
 from plotly import subplots
 
-from thunderpulse import processing, utils
+from thunderpulse.data_handling.data import load_data
+from thunderpulse.data_handling.preprocessing import (
+    preprocessing_current_slice,
+)
 
 from . import data_selection as ds
 
@@ -83,7 +87,9 @@ def callbacks_traces(app):
 
         if isinstance(channels, list):
             channels = np.array(channels)
-        d = utils.data.load_data(**filepath)
+
+        embed()
+        d = load_data(**filepath)
         time_display = 1
 
         # probe_frame = nix_file.blocks[0].data_frames["probe_frame"]
@@ -116,7 +122,7 @@ def callbacks_traces(app):
         #         recording, time_index, time_display, sample_rate
         #     )
         # else:
-        sliced_data = processing.preprocessing.preprocessing_current_slice(
+        sliced_data = preprocessing_current_slice(
             sliced_data,
             d.metadata.samplerate,
             switch_bandpass,
