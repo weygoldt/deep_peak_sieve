@@ -1,9 +1,46 @@
-
-
 # ThunderPulse
 
 **ThunderPulse** is a toolbox to work with peaks or pulses of different
 emitters that may change position in multichannel biological signals.
+
+---
+
+## TODO ✅
+
+### Short-Term
+
+- [ ] [Patrick] Add logging to the dash application
+- [ ] [Alex] Seperate the dash callbacks to the ui folder
+- [ ] [Patrick] Build an embedder base class for umap/VAE/PCA...
+- [ ] [Alex] Dataclass in dcc.Storage 
+- [ ] Export to nix file 
+- [ ] Build GUI elements to save configs to `scipy.signal.find_peaks`
+
+### Long-Term
+
+- [ ] Implement min/max peak halfwidth
+- [ ] Implement training on all labeled samples, not just the ones present in the labels.json file
+- [ ] Implement active learnign. Currently, we just label -> train -> classify. For that, checkout python package [baal](https://github.com/baal-org/baal?tab=readme-ov-file)
+- [ ] Implement the latent space sampling strategy, currently we just do stratified random sampling.
+- [ ] Generalize to mono- and polyphasic peaks  
+      _Currently, only monophonic peaks are well-supported. Polyphasic peaks require handling the order of positive and negative excursions (see `deep_peak_sieve/prepro/collect_peaks.py`)._
+
+## DONE 🎉
+
+- [x] [Patrick] Use the `get_file_list` function to get the wav files and raise error if returned list is nested to prevent opening too many files at once (otherwise this crashes the `wavefile` library that the `AudioLoader` uses as backend)
+- [x] Add print statement for overall labeling progress
+- [x] [Alex] Build data loading classes to unify nix data and wav files
+- [x] [Patrick] Outsource the exploration file
+- [x] Build testdata set with spikesorting data and eel/pulsefish data
+- [x] Add garbage collection to `collect_peaks.py`, when running for days the ram usage increases for some reason
+- [x] Add user input to the sampler to prompt whether to overwrite existing samples file
+- [x] Add quit option to the labeler GUI to allow for safe quitting
+- [x] Implement incremental labeling: The labeler should check if there is already a label for the present sample and skip it.
+- [x] Implement incremental peak detection: When detecting on a large dataset and an error occurs, it should not start completely from scratch again.
+- [x] Make smoothing and resampling configurable via CLI
+- [x] Set smoothing window by time instead of samples
+- [x] Resample all inputs to the same sampling rate
+- [x] Fix logger configurator (issue with `src/` directory structures)
 
 ---
 
@@ -165,46 +202,6 @@ classify_peaks --help
 classify_peaks /path/to/dataset_peaks -vvv
 ```
 
----
-
-## TODO ✅
-
-### Short-Term
-
-- [ ] [Patrick] Add logging to the dash application
-- [ ] [Alex] Seperate the dash callbacks to the ui folder
-- [ ] [Patrick] Build an embedder base class for umap/VAE/PCA...
-- [ ] [Alex] Dataclass in dcc.Storage 
-- [ ] Export to nix file 
-- [ ] Build GUI elements to save configs to `scipy.signal.find_peaks`
-
-### Long-Term
-
-- [ ] Implement min/max peak halfwidth
-- [ ] Implement training on all labeled samples, not just the ones present in the labels.json file
-- [ ] Implement active learnign. Currently, we just label -> train -> classify. For that, checkout python package [baal](https://github.com/baal-org/baal?tab=readme-ov-file)
-- [ ] Implement the latent space sampling strategy, currently we just do stratified random sampling.
-- [ ] Generalize to mono- and polyphasic peaks  
-      _Currently, only monophonic peaks are well-supported. Polyphasic peaks require handling the order of positive and negative excursions (see `deep_peak_sieve/prepro/collect_peaks.py`)._
-
-## DONE 🎉
-
-- [x] [Patrick] Use the `get_file_list` function to get the wav files and raise error if returned list is nested to prevent opening too many files at once (otherwise this crashes the `wavefile` library that the `AudioLoader` uses as backend)
-- [x] Add print statement for overall labeling progress
-- [x] [Alex] Build data loading classes to unify nix data and wav files
-- [x] [Patrick] Outsource the exploration file
-- [x] Build testdata set with spikesorting data and eel/pulsefish data
-- [x] Add garbage collection to `collect_peaks.py`, when running for days the ram usage increases for some reason
-- [x] Add user input to the sampler to prompt whether to overwrite existing samples file
-- [x] Add quit option to the labeler GUI to allow for safe quitting
-- [x] Implement incremental labeling: The labeler should check if there is already a label for the present sample and skip it.
-- [x] Implement incremental peak detection: When detecting on a large dataset and an error occurs, it should not start completely from scratch again.
-- [x] Make smoothing and resampling configurable via CLI
-- [x] Set smoothing window by time instead of samples
-- [x] Resample all inputs to the same sampling rate
-- [x] Fix logger configurator (issue with `src/` directory structures)
-
----
 
 ## Other Notes
 
