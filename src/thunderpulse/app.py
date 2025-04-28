@@ -2,10 +2,12 @@ import dash_bootstrap_components as dbc
 from dash import Dash, dcc, html
 
 # import thunderpulse.tables as tables
-from thunderpulse import graphs, processing, ui
+# from thunderpulse import graphs, processing, ui
+from thunderpulse import ui, ui_callbacks
 
 
-def main():
+def main() -> None:
+    """Generate the Dash app."""
     app = Dash(
         external_stylesheets=[dbc.themes.DARKLY],
     )
@@ -13,11 +15,9 @@ def main():
     header = html.H3(children="Thunderpulse", style={"textAlign": "center"})
     channel_slider = ui.channel_slider.create_channel_slider()
     time_slider = ui.time_slider.create_time_slider()
-    layout_graph_probe = ui.layout_probe_graph.create_layout_probe_graph()
-    visualization_tabs = (
-        ui.layout_visualization_tabs.create_visualization_tabs()
-    )
-    config_tabs = ui.layout_config_tabs.create_config_tabs()
+    layout_graph_probe = ui.probe_graph.create_layout_probe_graph()
+    visualization_tabs = ui.visualization_tabs.create_visualization_tabs()
+    config_tabs = ui.config_tabs.combine_config_cards.create_config_tabs()
 
     app.layout = dbc.Container(
         [
@@ -66,22 +66,24 @@ def main():
         fluid=True,
     )
 
-    ui.callbacks.preprocessing_card_callbacks.callbacks(app)
-    ui.callbacks.io_card_callbacks.callbacks_io(app)
-    ui.channel_slider.callback_channel_slider(app)
-    ui.time_slider.callback_time_slider(app)
+    ui_callbacks.config_tabs.preprocessing_card.callbacks(app)
+    ui_callbacks.config_tabs.io_card.callbacks(app)
+    ui_callbacks.channel_slider.callbacks(app)
+    ui_callbacks.time_slider.callbacks(app)
 
     # ui.callbacks..processing_io_callbacks(app)
-    processing.save_processing.callback_save_processing_channels(app)
-    processing.waveforms.callbacks_create_waveforms(app)
-    processing.calc_umap.callbacks_create_umap_embedding(app)
+    # processing.save_processing.callback_save_processing_channels(app)
+    # processing.waveforms.callbacks_create_waveforms(app)
+    # processing.calc_umap.callbacks_create_umap_embedding(app)
 
-    graphs.traces.callbacks_traces(app)
-    graphs.psd.callbacks_psd(app)
-    graphs.probe.callbacks_probe(app)
-    graphs.spikes_ampl.callbacks_spikes_ampl(app)
-    graphs.waveforms.callback_waveforms(app)
-    graphs.dashumap.callbacks_umap(app)
+    ui_callbacks.graphs.traces.callbacks_traces(app)
+    ui_callbacks.graphs.probe.callbacks_probe(app)
+
+    # NOTE: NOT WORKING
+    # ui_callbacks.graphs.psd.callbacks_psd(app)
+    # ui_callbacks.graphs.spikes_ampl.callbacks_spikes_ampl(app)
+    # ui_callbacks.graphs.waveforms.callback_waveforms(app)
+    # ui_callbacks.graphs.dashumap.callbacks_umap(app)
 
     # tables.peak_table_window.callbacks_peak_table_window(app)
 
