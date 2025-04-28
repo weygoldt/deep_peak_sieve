@@ -32,7 +32,7 @@ class Paths:
 
 
 @dataclass
-class SensoryArray:
+class SensorArray:
     """Representation of the sensory array.
 
     Attributes
@@ -56,7 +56,7 @@ class Data:
     data: AudioLoader | neo.OpenEphysBinaryIO
     metadata: Metadata
     paths: Paths
-    sensorarray: SensoryArray
+    sensorarray: SensorArray
 
 
 def load_data(data_path: Path, save_path: Path, probe_path: Path) -> Data:
@@ -85,7 +85,7 @@ def load_data(data_path: Path, save_path: Path, probe_path: Path) -> Data:
             d,
             Metadata(d.rate, d.channels, d.frames / d.rate, d.frames),
             Paths(data_path, save_path, probe_path),
-            SensoryArray(
+            SensorArray(
                 ids,
                 coordinates[:, 0],
                 coordinates[:, 1],
@@ -93,10 +93,7 @@ def load_data(data_path: Path, save_path: Path, probe_path: Path) -> Data:
             ),
         )
     else:
-        # dataset = neo.OpenEphysBinaryIO(data_path).read(lazy=True) # NOTE: Direct path to file?
-        dataset = neo.OpenEphysBinaryIO(
-            Path(data_path).parent.parent / "neuronaldata" / "Recording-4"
-        ).read(lazy=True)
+        dataset = neo.OpenEphysBinaryIO(data_path).read(lazy=True)
         data = dataset[0].segments[0].analogsignals[0]
 
         with Path.open(probe_path) as f:
@@ -117,7 +114,7 @@ def load_data(data_path: Path, save_path: Path, probe_path: Path) -> Data:
                 data.shape[0],
             ),
             Paths(data_path, save_path, probe_path),
-            SensoryArray(
+            SensorArray(
                 ids, coordinates[:, 0], coordinates[:, 1], coordinates[:, 2]
             ),
         )
