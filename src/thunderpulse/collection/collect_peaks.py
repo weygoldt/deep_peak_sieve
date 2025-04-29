@@ -66,12 +66,20 @@ def detect_peaks(
     channels_count: int,
     peak_height_threshold: float,
     min_peak_distance: int,
+    mode="both",
 ):
     """
     Run peak-finding for each channel in a filtered block.
     Returns a list of peak indices and a parallel list of channel indices.
     """
     log.debug("Starting peak detection")
+
+    assert mode in [
+        "peak",
+        "trough",
+        "both",
+    ], "Invalid mode for peak detection"
+
     peaks_list = [
         find_peaks(
             block_filtered[:, ch],
