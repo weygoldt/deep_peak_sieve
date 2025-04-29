@@ -2,7 +2,7 @@ from typing import Annotated
 import dash_bootstrap_components as dbc
 from dash import Dash, dcc, html
 
-from thunderpulse import ui, ui_callbacks
+from thunderpulse import ui_layout, ui_callbacks
 import typer
 
 from thunderpulse.utils.loggers import get_logger, configure_logging
@@ -30,11 +30,15 @@ def main(
     )
 
     header = html.H3(children="Thunderpulse", style={"textAlign": "center"})
-    channel_slider = ui.channel_slider.create_channel_slider()
-    time_slider = ui.time_slider.create_time_slider()
-    layout_graph_probe = ui.probe_graph.create_layout_probe_graph()
-    visualization_tabs = ui.visualization_tabs.create_visualization_tabs()
-    config_tabs = ui.config_tabs.combine_config_cards.create_config_tabs()
+    channel_slider = ui_layout.channel_slider.create_channel_slider()
+    time_slider = ui_layout.time_slider.create_time_slider()
+    layout_graph_probe = ui_layout.probe_graph.create_layout_probe_graph()
+    visualization_tabs = (
+        ui_layout.visualization_tabs.create_visualization_tabs()
+    )
+    config_tabs = (
+        ui_layout.config_tabs.combine_config_cards.create_config_tabs()
+    )
 
     app.layout = dbc.Container(
         [

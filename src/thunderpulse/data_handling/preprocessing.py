@@ -2,7 +2,7 @@ import numpy as np
 from IPython import embed
 from joblib import Parallel, delayed
 
-from thunderpulse.utils import filter
+from thunderpulse.data_handling import filter
 
 
 def preprocessing_current_slice(

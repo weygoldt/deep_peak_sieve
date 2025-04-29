@@ -1,6 +1,4 @@
-"""
-Check availability of CUDA-enabled GPU and return the correct device for PyTorch.
-"""
+"""Check availability of CUDA-enabled GPU and return the correct device for PyTorch."""
 
 import torch
 
@@ -20,7 +18,7 @@ def get_device() -> torch.device:
     if torch.cuda.is_available() is True:
         device = torch.device("cuda")  # nvidia / amd gpu
     elif torch.backends.mps.is_available() is True:
-        device = torch.device("mps")  # apple m1 gpu
+        device = torch.device("mps")  # apple m* gpu
     else:
         device = torch.device("cpu")  # no gpu
     return device
