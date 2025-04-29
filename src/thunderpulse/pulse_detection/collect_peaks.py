@@ -1,9 +1,10 @@
 """Main loop to parse large datasets and collect peaks."""
 
+from dataclasses import dataclass
 import gc
 from datetime import timedelta
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, List, Tuple, Optional
 
 import humanize
 import numpy as np
@@ -13,6 +14,7 @@ from IPython import embed
 from scipy.interpolate import interp1d
 from scipy.signal import find_peaks, savgol_filter
 
+from thunderpulse.data_handling.filters import bandpass_filter, notch_filter
 from thunderpulse.data_handling.data import load_raw_data, save_numpy
 from thunderpulse.utils.loggers import (
     configure_logging,
@@ -22,6 +24,88 @@ from thunderpulse.utils.loggers import (
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
 log = get_logger(__name__)
+
+filter_methods = {
+    "bandpass": bandpass_filter,
+    "notch": notch_filter,
+    "savgol": savgol_filter,
+}
+
+
+@dataclass
+class FindPeaksKwargs:
+    """Parameters for `scipy.signal.find_peaks`."""
+
+    height: float | np.ndarray | None = None
+    threshold: float | np.ndarray | None = None
+    distance: float | None = None
+    prominence: float | np.ndarray | None = None
+    width: float | np.ndarray | None = None
+
+
+@dataclass
+class PeakDetectionParameters:
+    """Parameters for peak detection."""
+
+    min_channels: int = 1
+    mode: str = "both"
+    peak_window: int = 10
+    find_peaks_kwargs: FindPeaksKwargs = FindPeaksKwargs(
+        height=0.001,
+        distance=None,
+        prominence=None,
+        width=None,
+    )
+
+
+@dataclass
+class SavgolParameters:
+    """Parameters for Savitzky-Golay filter."""
+
+    window_length: int = 5
+    polyorder: int = 3
+
+
+@dataclass
+class BandpassParameters:
+    """Parameters for bandpass filter."""
+
+    lowcut: float = 0.1
+    highcut: float = 3000.0
+    order: int = 5
+
+
+@dataclass
+class NotchParameters:
+    """Parameters for notch filter."""
+
+    notch_freq: float = 50.0
+    quality_factor: float = 30.0
+
+
+@dataclass
+class FiltersParameters:
+    """Parameters for filtering."""
+
+    filters: list = ["savgol"]
+    filter_params: list = []
+
+
+@dataclass
+class ResampleParameters:
+    """Parameters for resampling."""
+
+    resample: bool = True
+    n_resamples: int = 512
+
+
+@dataclass
+class Params:
+    """Parameters for peak detection."""
+
+    filters: FiltersParameters
+    peaks: PeakDetectionParameters
+    resample: ResampleParameters
 
 
 def pretty_duration_humanize(seconds: float) -> str:
@@ -42,62 +126,117 @@ def initialize_dataset() -> dict:
     }
 
 
-def apply_filter(
-    block: np.ndarray, sample_rate: float, params: dict
+def apply_filters(
+    data: np.ndarray, rate: float, params: FiltersParameters
 ) -> np.ndarray:
-    """
-    Apply the specified filtering method to the audio block data.
-    """
-    if params["mode"] == "savgol":
-        log.debug("Applying Savitzky-Golay filter")
-        return savgol_filter(
-            block.T,
-            window_length=params["window_length"],
-            polyorder=params["polyorder"],
-        ).T
-    if params["mode"] == "none":
-        log.debug("No filtering applied")
-        return block
-    raise ValueError(f"Filtering mode {params['mode']} not recognized")
+    """Apply the specified filters to the data."""
+    if not isinstance(params.filters, list):
+        msg = "Filters must be a list of strings"
+        raise TypeError(msg)
+    if not isinstance(params.filter_params, list):
+        msg = "Filter parameters must be a list of dictionaries"
+        raise TypeError(msg)
+    if len(params.filters) != len(params.filter_params):
+        msg = "Filters and filter parameters must be the same length"
+        raise ValueError(msg)
+    if len(params.filters) == 0:
+        log.debug("No filters applied")
+        return data
+    if len(params.filters) == 1:
+        log.debug(f"Applying filter: {params.filters[0]}")
+        return filter_methods[params.filters[0]](
+            data,
+            **params.filter_params[0],
+            fs=rate,
+        )
+    # Apply all filters in sequence
+    for filter_name, filter_params in zip(
+        params.filters,
+        params.filter_params,
+        strict=True,
+    ):
+        log.debug(f"Applying filter: {filter_name}")
+        data = filter_methods[filter_name](
+            data,
+            **filter_params,
+            fs=rate,
+        )
+    return data
 
 
 def detect_peaks(
-    block_filtered: np.ndarray,
-    channels_count: int,
-    peak_height_threshold: float,
-    min_peak_distance: int,
-    mode="both",
-):
-    """
-    Run peak-finding for each channel in a filtered block.
-    Returns a list of peak indices and a parallel list of channel indices.
-    """
-    log.debug("Starting peak detection")
+    block: np.ndarray,
+    mode: str = "both",
+    find_peaks_kwargs: dict | None = None,
+) -> tuple[list[np.ndarray], list[np.ndarray]]:
+    """Detect peaks in 1D signal.
 
-    assert mode in [
-        "peak",
-        "trough",
-        "both",
-    ], "Invalid mode for peak detection"
+    Parameters
+    ----------
+    block_filtered : np.ndarray
+        Array with shape ``(n_samples, channels_count)`` containing the
+        pre-filtered signal.
+    mode : {'peak', 'trough', 'both'}, default 'both'
+        * ``'peak'``   – detect positive excursions only
+        * ``'trough'`` – detect negative excursions only
+        * ``'both'``   – detect both and merge the results (default)
+    find_peaks_kwargs : dict, optional
+        Additional arguments passed to `scipy.signal.find_peaks`.
 
-    peaks_list = [
-        find_peaks(
-            block_filtered[:, ch],
-            prominence=peak_height_threshold,
-            distance=min_peak_distance,
-        )[0]
-        for ch in range(channels_count)
-    ]
-    channels_list = [
-        np.array([ch] * len(peaks_list[ch]), dtype=np.int32)
-        for ch in range(channels_count)
-    ]
+    Returns
+    -------
+    peaks_list : list[np.ndarray]
+        One NumPy array per channel containing peak sample-indices (sorted).
+    channels_list : list[np.ndarray]
+        Parallel list containing the channel-ID for every detected index.
+    """
+    if mode not in {"peak", "trough", "both"}:
+        msg = "Mode must be one of {'peak', 'trough', 'both'}"
+        raise ValueError(msg)
+
+    log.debug(f"Starting peak detection with mode: {mode}")
+
+    peaks_list: list[np.ndarray] = []
+    channels_list: list[np.ndarray] = []
+
+    for ch in range(block.shape[1]):
+        signal = block[:, ch]
+
+        pos_peaks, _ = (
+            find_peaks(
+                signal,
+                **(find_peaks_kwargs or {}),
+            )
+            if mode in {"peak", "both"}
+            else (np.empty(0, dtype=int), None)
+        )
+
+        neg_peaks, _ = (
+            find_peaks(
+                -signal,
+                **(find_peaks_kwargs or {}),
+            )
+            if mode in {"trough", "both"}
+            else (np.empty(0, dtype=int), None)
+        )
+
+        # concatenate & sort to preserve chronological order
+        peaks_ch = np.sort(np.concatenate((pos_peaks, neg_peaks)))
+        peaks_list.append(peaks_ch)
+
+        # build matching channel-id array
+        channels_list.append(np.full_like(peaks_ch, ch, dtype=np.int32))
+
     return peaks_list, channels_list
 
 
-def group_peaks(peaks, channels, peak_window):
-    """
-    Group peaks that lie within a certain distance (peak_window).
+def group_peaks_across_channels_by_time(
+    peaks: list[np.ndarray],
+    channels: list[np.ndarray],
+    peak_window: int = 10,
+) -> tuple:
+    """Group peaks that lie within a certain distance (peak_window).
+
     Only merges them if they belong to different channels.
     """
     # Flatten out everything and sort
@@ -135,29 +274,49 @@ def group_peaks(peaks, channels, peak_window):
 
     # Check duplicates
     for i in range(len(peak_groups)):
-        unique_channels, counts = np.unique(
-            peak_channels[i], return_counts=True
-        )
+        _, counts = np.unique(peak_channels[i], return_counts=True)
         if np.any(counts > 1):
-            # Detected a peak group that contains the same channel multiple times
-            log.warning(
-                "Found duplicate channels in a peak group! This is a bug and should be reported."
+            msg = (
+                "Found duplicate channels in a peak group! "
+                f"Peak group: {peak_groups[i]}, Channels: {peak_channels[i]}"
             )
+            log.warning(msg)
 
     return peak_groups, peak_channels
 
 
 def filter_peak_groups(
-    grouped_peaks, grouped_channels, min_channels_with_peaks
-):
+    grouped_peaks: list[np.ndarray],
+    grouped_channels: list[np.ndarray],
+    min_channels_with_peaks: int = 1,
+) -> tuple[list[np.ndarray], list[np.ndarray]]:
+    """Filter out peak groups that are found on too few channels.
+
+    Parameters
+    ----------
+    grouped_peaks
+        List of 1-D index arrays – one array per detected peak group.
+    grouped_channels
+        List of 1-D channel-index arrays matching `grouped_peaks`.
+    min_channels_with_peaks
+        A group is **kept** only if it is present on *strictly more than* this
+        number of channels.
+
+    Returns
+    -------
+    kept_peaks, kept_channels
+        Two lists (same length, same order) containing only the qualifying
+        groups.
     """
-    Discard groups that do not have enough channels with peaks.
-    """
-    group_lengths = [len(g) for g in grouped_peaks]
-    bool_idx = np.array(group_lengths) > min_channels_with_peaks
-    grouped_channels = np.array(grouped_channels, dtype="object")[bool_idx]
-    grouped_peaks = np.array(grouped_peaks, dtype="object")[bool_idx]
-    return grouped_peaks, grouped_channels
+    kept_peaks: list[np.ndarray] = []
+    kept_channels: list[np.ndarray] = []
+
+    for peaks, chans in zip(grouped_peaks, grouped_channels, strict=True):
+        if len(peaks) > min_channels_with_peaks:
+            kept_peaks.append(peaks)
+            kept_channels.append(chans)
+
+    return kept_peaks, kept_channels
 
 
 def compute_mean_peak(
@@ -228,6 +387,118 @@ def compute_mean_peak(
     return mean_peak
 
 
+def process_block(data: np.ndarray, rate: float, params: dict):
+    # Ensure we treat mono data as [n_samples, 1]
+    if data.ndim == 1:
+        data = np.expand_dims(data, axis=1)
+
+    # Apply filtering
+    block_filtered = apply_filter(data, rate, params=params.filters)
+
+    # Detect peaks on each channel
+    peaks_list, channels_list = detect_peaks(
+        block_filtered,
+        mode=params.peaks["mode"],
+        find_peaks_kwargs=params.peaks,
+    )
+
+    # Group them
+    grouped_peaks, grouped_channels = group_peaks_across_channels_by_time(
+        peaks_list,
+        channels_list,
+        # peak_window=int(min_peak_distance // 2),
+        peak_window=params.peaks["peak_window"],
+    )
+
+    # Filter out groups that do not meet the threshold
+    grouped_peaks, grouped_channels = filter_peak_groups(
+        grouped_peaks, grouped_channels, params.peaks["min_channels"]
+    )
+
+    # Compute means of each group
+    log.info(f"Found a total of {len(grouped_peaks)} peaks")
+    if len(grouped_peaks) == 0:
+        log.debug(f"Found 0 peaks. Skipping block {blockiterval} for now.")
+        continue
+
+    centers = [int(np.mean(g)) for g in grouped_peaks]
+
+    # For each peak group, compute & store waveform
+    for peakiterval, (pks, chans, center) in enumerate(
+        zip(grouped_peaks, grouped_channels, centers, strict=False)
+    ):
+        chans = np.array(chans)
+        if chans.dtype not in [np.int32, np.int64, np.bool]:
+            # This should not happen, but just in case
+            log.warning(
+                f"Channel type is not int32 or int64 but {chans.dtype}. Converting to int64."
+            )
+            chans = np.array(chans, dtype=np.int64)
+
+        pks = np.array(pks)
+        if pks.dtype not in [np.int32, np.int64]:
+            # This should not happen, but just in case
+            log.warning(
+                f"Peak type is not int32 or int64 but {pks.dtype}. Converting to int64."
+            )
+            pks = np.array(pks, dtype=np.int64)
+
+        mean_peak = compute_mean_peak(
+            block_filtered, center, chans, around_peak_window
+        )
+
+        if (mean_peak is None) or (len(chans) == 0):
+            msg = "Failed to compute mean peak due to index out of range or degenerate peak shape."
+            log.warning(msg)
+            continue
+
+        # Resample mean peak
+        if resample:
+            log.debug("Resampling mean peak")
+            x = np.linspace(0, len(mean_peak), len(mean_peak))
+            f = interp1d(x, mean_peak, kind="cubic")
+            xnew = np.linspace(0, len(mean_peak), n_resamples)
+            mean_peak = f(xnew)
+
+        # Mark which channels contributed
+        bool_channels = np.zeros(data.channels, dtype=bool)
+        bool_channels[chans] = True
+
+        # print("-------------------------------------")
+        # print("data.channels:")
+        # print(data.channels)
+        # print("pks:")
+        # print(pks)
+        # print("chans:")
+        # print(chans)
+        # print("block_filtered.shape:")
+        # print(block_filtered.shape)
+
+        # Amplitudes on each channel
+        amp_index = np.array(
+            [
+                np.argmax(np.abs(block_filtered[pks, ch]))
+                for ch in range(data.channels)
+            ]
+        )
+        amps = np.array(
+            [block_filtered[pks, ch][idx] for ch, idx in enumerate(amp_index)]
+        )
+
+        center += blockiterval * (blocksize - overlap)
+        start_stop_index = [
+            center - around_peak_window,
+            center + around_peak_window,
+        ]
+        dataset["peaks"].append(mean_peak)
+        dataset["channels"].append(bool_channels)
+        dataset["amplitudes"].append(amps)
+        dataset["centers"].append(center)
+        dataset["start_stop_index"].append(start_stop_index)
+        collected_peak_counter += 1
+    pass
+
+
 def process_file(
     data: AudioLoader,
     save_path: Path,
@@ -241,10 +512,13 @@ def process_file(
     n_resamples: int = 512,
 ):
     data.set_unwrap(thresh=1.5)
-    blocksize = int(np.ceil(data.rate * buffersize_s))
-    overlap = (
-        blocksize // 10
-    )  # Just a bit clearer than int(np.ceil(blocksize // 10))
+
+    if data.rate is None:
+        raise ValueError("Data rate is None, cannot process file.")
+    rate = data.rate
+
+    blocksize = int(np.ceil(rate * buffersize_s))
+    overlap = blocksize // 10
 
     # Configuration
     min_peak_distance = int(np.ceil(peak_distance_s * data.rate))
@@ -287,123 +561,6 @@ def process_file(
         for blockiterval, block in enumerate(
             data.blocks(block_size=blocksize, noverlap=overlap)
         ):
-            # Ensure we treat mono data as [n_samples, 1]
-            if data.channels == 1:
-                block = np.expand_dims(block, axis=1)
-
-            # Apply filtering
-            block_filtered = apply_filter(
-                block, data.rate, params=filtering_params
-            )
-
-            # Detect peaks on each channel
-            abs_block_filtered = np.abs(block_filtered)
-            peaks_list, channels_list = detect_peaks(
-                abs_block_filtered,
-                data.channels,
-                peak_height_threshold,
-                min_peak_distance,
-            )
-
-            # Group them
-            grouped_peaks, grouped_channels = group_peaks(
-                peaks_list,
-                channels_list,
-                peak_window=int(min_peak_distance // 2),
-            )
-
-            # Filter out groups that do not meet the threshold
-            grouped_peaks, grouped_channels = filter_peak_groups(
-                grouped_peaks, grouped_channels, min_channels_with_peaks
-            )
-
-            # Compute means of each group
-            log.info(f"Found a total of {len(grouped_peaks)} peaks")
-            if len(grouped_peaks) == 0:
-                log.debug(
-                    f"Found 0 peaks. Skipping block {blockiterval} for now."
-                )
-                continue
-
-            centers = [int(np.mean(g)) for g in grouped_peaks]
-
-            # For each peak group, compute & store waveform
-            for peakiterval, (pks, chans, center) in enumerate(
-                zip(grouped_peaks, grouped_channels, centers, strict=False)
-            ):
-                chans = np.array(chans)
-                if chans.dtype not in [np.int32, np.int64, np.bool]:
-                    # This should not happen, but just in case
-                    log.warning(
-                        f"Channel type is not int32 or int64 but {chans.dtype}. Converting to int64."
-                    )
-                    chans = np.array(chans, dtype=np.int64)
-
-                pks = np.array(pks)
-                if pks.dtype not in [np.int32, np.int64]:
-                    # This should not happen, but just in case
-                    log.warning(
-                        f"Peak type is not int32 or int64 but {pks.dtype}. Converting to int64."
-                    )
-                    pks = np.array(pks, dtype=np.int64)
-
-                mean_peak = compute_mean_peak(
-                    block_filtered, center, chans, around_peak_window
-                )
-
-                if (mean_peak is None) or (len(chans) == 0):
-                    msg = "Failed to compute mean peak due to index out of range or degenerate peak shape."
-                    log.warning(msg)
-                    continue
-
-                # Resample mean peak
-                if resample:
-                    log.debug("Resampling mean peak")
-                    x = np.linspace(0, len(mean_peak), len(mean_peak))
-                    f = interp1d(x, mean_peak, kind="cubic")
-                    xnew = np.linspace(0, len(mean_peak), n_resamples)
-                    mean_peak = f(xnew)
-
-                # Mark which channels contributed
-                bool_channels = np.zeros(data.channels, dtype=bool)
-                bool_channels[chans] = True
-
-                # print("-------------------------------------")
-                # print("data.channels:")
-                # print(data.channels)
-                # print("pks:")
-                # print(pks)
-                # print("chans:")
-                # print(chans)
-                # print("block_filtered.shape:")
-                # print(block_filtered.shape)
-
-                # Amplitudes on each channel
-                amp_index = np.array(
-                    [
-                        np.argmax(np.abs(block_filtered[pks, ch]))
-                        for ch in range(data.channels)
-                    ]
-                )
-                amps = np.array(
-                    [
-                        block_filtered[pks, ch][idx]
-                        for ch, idx in enumerate(amp_index)
-                    ]
-                )
-
-                center += blockiterval * (blocksize - overlap)
-                start_stop_index = [
-                    center - around_peak_window,
-                    center + around_peak_window,
-                ]
-                dataset["peaks"].append(mean_peak)
-                dataset["channels"].append(bool_channels)
-                dataset["amplitudes"].append(amps)
-                dataset["centers"].append(center)
-                dataset["start_stop_index"].append(start_stop_index)
-                collected_peak_counter += 1
-
             pbar.update(task, advance=1)
 
         dataset["peaks"] = np.array(dataset["peaks"])
