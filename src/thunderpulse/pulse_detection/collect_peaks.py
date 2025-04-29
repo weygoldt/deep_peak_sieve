@@ -13,7 +13,7 @@ from IPython import embed
 from scipy.interpolate import interp1d
 from scipy.signal import find_peaks, savgol_filter
 
-from thunderpulse.utils.datasets import load_raw_data, save_numpy
+from thunderpulse.data_handling.data import load_raw_data, save_numpy
 from thunderpulse.utils.loggers import (
     configure_logging,
     get_logger,
