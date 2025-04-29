@@ -1,8 +1,9 @@
 from . import (
     calc_umap,
-    io,
-    peak_detection,
-    preprocessing,
+    graphs,
+    channel_slider,
+    config_tabs,
     save_processing,
+    time_slider,
     waveforms,
 )

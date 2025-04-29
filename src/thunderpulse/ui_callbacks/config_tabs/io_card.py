@@ -1,13 +1,9 @@
 import pathlib
-from dataclasses import asdict
 
-from dash import Dash, Input, Output, ctx
-from IPython import embed
-
-from thunderpulse.data_handling.data import load_data
+from dash import Dash, Input, Output, ctx, html
 
 
-def callbacks_io(app: Dash) -> None:
+def callbacks(app: Dash) -> None:
     @app.callback(
         Output("datapath", "invalid"),
         Output("datapath", "valid"),

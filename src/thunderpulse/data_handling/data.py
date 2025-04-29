@@ -5,8 +5,9 @@ from pathlib import Path
 import neo
 import numpy as np
 import numpy.typing as npt
-
 from audioio import AudioLoader
+from IPython import embed
+
 from thunderpulse.utils.loggers import get_logger
 
 log = get_logger(__name__)
@@ -33,11 +34,11 @@ class Paths:
 
 @dataclass
 class SensorArray:
-    """Representation of the sensory array.
+    """Representation of the sensor array.
 
     Attributes
     ----------
-    ids : Indiviudal ids of the sesory array
+    ids : Indiviudal ids of the sesor array
     x : x-positions
     y : y-positions
     z : z-positions
@@ -59,24 +60,31 @@ class Data:
     sensorarray: SensorArray
 
 
-def load_data(data_path: Path, save_path: Path, probe_path: Path) -> Data:
+def load_data(
+    data_path: Path | str, save_path: Path | str, probe_path: Path | str
+) -> Data:
     """Load OpenEphys or WAV data from the specified path."""
+    data_path = Path(data_path)
+    save_path = Path(save_path)
+    probe_path = Path(probe_path)
     wav_files = list(Path(data_path).rglob("*.wav"))
+    log.error(wav_files)
 
     if wav_files:
-        wav_files = [str(f) for f in wav_files]
-        d = AudioLoader(wav_files)
-        with open(probe_path) as f:
+        log.debug("Data directory has wav files")
+        with Path.open(probe_path) as f:
             seonsory_array = json.load(f)
+
         file_list, _, dtype = get_file_list(
             data_path, "wav", make_save_path=False
-        )[0]
+        )
         if isinstance(file_list[0], list):
             msg = (
                 "Multiple directories found. Please provide a single "
                 + "directory or file of a single recording session."
             )
             raise ValueError(msg)
+
         d = AudioLoader(file_list)
         ids = np.arange(len(seonsory_array["coordinates"]))
         coordinates = np.array(seonsory_array["coordinates"])
