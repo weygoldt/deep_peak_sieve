@@ -68,9 +68,8 @@ def load_data(
     save_path = Path(save_path)
     probe_path = Path(probe_path)
     wav_files = list(Path(data_path).rglob("*.wav"))
-    log.error(wav_files)
 
-    if wav_files:
+    if len(wav_files) > 0:
         log.debug("Data directory has wav files")
         with Path.open(probe_path) as f:
             seonsory_array = json.load(f)
@@ -78,12 +77,15 @@ def load_data(
         file_list, _, dtype = get_file_list(
             data_path, "wav", make_save_path=False
         )
+        log.debug(f"File list: {file_list}")
         if isinstance(file_list[0], list):
             msg = (
                 "Multiple directories found. Please provide a single "
                 + "directory or file of a single recording session."
             )
             raise ValueError(msg)
+        if isinstance(file_list[0], Path):
+            file_list = [str(file) for file in file_list]
 
         d = AudioLoader(file_list)
         ids = np.arange(len(seonsory_array["coordinates"]))

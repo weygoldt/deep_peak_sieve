@@ -11,8 +11,11 @@ from thunderpulse.data_handling.data import load_data
 from thunderpulse.data_handling.preprocessing import (
     preprocessing_current_slice,
 )
+from thunderpulse.utils.loggers import get_logger
 
 from . import data_selection as ds
+
+log = get_logger(__name__)
 
 
 def default_traces_figure():
@@ -88,7 +91,7 @@ def callbacks_traces(app):
         if isinstance(channels, list):
             channels = np.array(channels)
 
-        embed()
+        log.info(f"Loading data into dashboard: {filepath}")
         d = load_data(**filepath)
         time_display = 1
 

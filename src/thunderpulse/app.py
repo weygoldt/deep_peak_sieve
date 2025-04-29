@@ -1,13 +1,30 @@
+from typing import Annotated
 import dash_bootstrap_components as dbc
 from dash import Dash, dcc, html
 
-# import thunderpulse.tables as tables
-# from thunderpulse import graphs, processing, ui
 from thunderpulse import ui, ui_callbacks
+import typer
+
+from thunderpulse.utils.loggers import get_logger, configure_logging
+
+typer_app = typer.Typer()
+log = get_logger(__name__)
 
 
-def main() -> None:
+@typer_app.command()
+def main(
+    verbose: Annotated[
+        int,
+        typer.Option(
+            "--verbose", "-v", count=True, help="Increase verbosity."
+        ),
+    ] = 0,
+) -> None:
     """Generate the Dash app."""
+
+    configure_logging(verbose)
+    log.info("Starting Thunderpulse Dashboard")
+
     app = Dash(
         external_stylesheets=[dbc.themes.DARKLY],
     )
@@ -66,29 +83,20 @@ def main() -> None:
         fluid=True,
     )
 
+    log.info("Initializing callbacks")
+    log.info("Initializing config tabs")
     ui_callbacks.config_tabs.preprocessing_card.callbacks(app)
     ui_callbacks.config_tabs.io_card.callbacks(app)
     ui_callbacks.channel_slider.callbacks(app)
     ui_callbacks.time_slider.callbacks(app)
 
-    # ui.callbacks..processing_io_callbacks(app)
-    # processing.save_processing.callback_save_processing_channels(app)
-    # processing.waveforms.callbacks_create_waveforms(app)
-    # processing.calc_umap.callbacks_create_umap_embedding(app)
-
+    log.info("Initializing graphs")
     ui_callbacks.graphs.traces.callbacks_traces(app)
     ui_callbacks.graphs.probe.callbacks_probe(app)
 
-    # NOTE: NOT WORKING
-    # ui_callbacks.graphs.psd.callbacks_psd(app)
-    # ui_callbacks.graphs.spikes_ampl.callbacks_spikes_ampl(app)
-    # ui_callbacks.graphs.waveforms.callback_waveforms(app)
-    # ui_callbacks.graphs.dashumap.callbacks_umap(app)
-
     # tables.peak_table_window.callbacks_peak_table_window(app)
-
     app.run(debug=True)
 
 
 if __name__ == "__main__":
-    main()
+    typer_app()
