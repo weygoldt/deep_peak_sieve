@@ -8,6 +8,7 @@ dependencies = [
     "audioio",
     "dash>=3.0.3",
     "dash-bootstrap-components>=2.0.2",
+    "dataclasses-json>=0.6.7",
     "humanize>=4.12.2",
     "ipython>=9.1.0",
     "lightning>=2.5.1",

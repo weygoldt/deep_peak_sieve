@@ -1,10 +1,11 @@
 """Main loop to parse large datasets and collect peaks."""
 
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, asdict, field
 import gc
 from datetime import timedelta
 from pathlib import Path
-from typing import Annotated, List, Tuple, Optional
+from typing import Annotated, List, Tuple, Optional, Dict, Any, Iterator
 
 import humanize
 import numpy as np
@@ -25,16 +26,11 @@ from thunderpulse.utils.loggers import (
 app = typer.Typer(pretty_exceptions_show_locals=False)
 log = get_logger(__name__)
 
-filter_methods = {
-    "bandpass": bandpass_filter,
-    "notch": notch_filter,
-    "savgol": savgol_filter,
-}
 
-
-@dataclass
+# leaf-level parameter blocks
+@dataclass(slots=True)
 class FindPeaksKwargs:
-    """Parameters for `scipy.signal.find_peaks`."""
+    """Arguments forwarded to :func:`scipy.signal.find_peaks`."""
 
     height: float | np.ndarray | None = None
     threshold: float | np.ndarray | None = None
@@ -42,25 +38,33 @@ class FindPeaksKwargs:
     prominence: float | np.ndarray | None = None
     width: float | np.ndarray | None = None
 
+    # ----------------------------------------------------------------- helpers
+    def to_kwargs(self, *, keep_none: bool = False) -> dict[str, Any]:
+        """Convert to plain ``dict`` suitable for ``scipy.signal.find_peaks``.
 
-@dataclass
-class PeakDetectionParameters:
-    """Parameters for peak detection."""
+        By default keys whose value is ``None`` are dropped.
 
-    min_channels: int = 1
-    mode: str = "both"
-    peak_window: int = 10
-    find_peaks_kwargs: FindPeaksKwargs = FindPeaksKwargs(
-        height=0.001,
-        distance=None,
-        prominence=None,
-        width=None,
-    )
+        Examples
+        --------
+        >>> fp = FindPeaksKwargs(height=0.5, prominence=None)
+        >>> fp.to_kwargs()
+        {'height': 0.5}
+        >>> signal.find_peaks(x, **fp.to_kwargs())
+        """
+        d = asdict(self)
+        if not keep_none:
+            d = {k: v for k, v in d.items() if v is not None}
+        return d
+
+    # optional: make the object directly “expandable” via ** operator
+    def __iter__(self) -> Iterator[tuple[str, Any]]:
+        """Allow ``dict(fp_kwargs)`` or ``**dict(fp_kwargs)``."""
+        yield from self.to_kwargs().items()
 
 
 @dataclass
 class SavgolParameters:
-    """Parameters for Savitzky-Golay filter."""
+    """Savitzky–Golay filter parameters."""
 
     window_length: int = 5
     polyorder: int = 3
@@ -68,44 +72,134 @@ class SavgolParameters:
 
 @dataclass
 class BandpassParameters:
-    """Parameters for bandpass filter."""
+    """IIR/FIR band-pass filter parameters."""
 
     lowcut: float = 0.1
-    highcut: float = 3000.0
+    highcut: float = 3_000.0
     order: int = 5
 
 
 @dataclass
 class NotchParameters:
-    """Parameters for notch filter."""
+    """Notch filter (single frequency) parameters."""
 
     notch_freq: float = 50.0
     quality_factor: float = 30.0
 
 
+# higher-level blocks
+@dataclass
+class PeakDetectionParameters:
+    """Wrapper around *find_peaks* plus global peak-group criteria."""
+
+    min_channels: int = 1
+    mode: str = "both"  # 'pos', 'neg', 'both'
+    peak_window: int = 10
+    find_peaks_kwargs: FindPeaksKwargs = field(
+        default_factory=lambda: FindPeaksKwargs(height=0.001)
+    )
+
+
 @dataclass
 class FiltersParameters:
-    """Parameters for filtering."""
+    """
+    Arbitrary sequence of filters.
 
-    filters: list = ["savgol"]
-    filter_params: list = []
+    *filters* is a list of **names**; *filter_params* holds a *parallel* list of
+    parameter objects (must be the same length / order).
+    """
+
+    filters: list[str] = field(default_factory=lambda: ["savgol"])
+    filter_params: list[object] = field(
+        default_factory=lambda: [SavgolParameters()]
+    )
 
 
 @dataclass
 class ResampleParameters:
-    """Parameters for resampling."""
+    """Zero-hold / FFT resampling settings."""
 
-    resample: bool = True
+    enabled: bool = True
     n_resamples: int = 512
 
 
+# root config
 @dataclass
 class Params:
-    """Parameters for peak detection."""
+    """
+    Full preprocessing configuration.
 
-    filters: FiltersParameters
-    peaks: PeakDetectionParameters
-    resample: ResampleParameters
+    Attributes
+    ----------
+    filters
+        Definition & parameters of the DSP filter pipeline.
+    peaks
+        Peak detection settings.
+    resample
+        Resampling settings.
+    """
+
+    filters: FiltersParameters = field(default_factory=FiltersParameters)
+    peaks: PeakDetectionParameters = field(
+        default_factory=PeakDetectionParameters
+    )
+    resample: ResampleParameters = field(default_factory=ResampleParameters)
+
+    # ── (de)serialisation helpers ──────────────────────────────────────
+    def to_dict(self) -> dict:
+        """Deep-convert to plain Python containers (JSON-safe)."""
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Params":
+        """Re-build :class:`Params` from *asdict*-style dict."""
+        # manual reconstruction because nested dataclasses are involved
+        return cls(
+            filters=FiltersParameters(
+                filters=d["filters"]["filters"],
+                filter_params=[
+                    _build_filter_param(pname, pobj)
+                    for pname, pobj in zip(
+                        d["filters"]["filters"], d["filters"]["filter_params"]
+                    )
+                ],
+            ),
+            peaks=PeakDetectionParameters(
+                min_channels=d["peaks"]["min_channels"],
+                mode=d["peaks"]["mode"],
+                peak_window=d["peaks"]["peak_window"],
+                find_peaks_kwargs=FindPeaksKwargs(
+                    **d["peaks"]["find_peaks_kwargs"]
+                ),
+            ),
+            resample=ResampleParameters(**d["resample"]),
+        )
+
+    def to_json(self, **json_kwargs) -> str:
+        """Serialise to JSON string."""
+        return json.dumps(self.to_dict(), **json_kwargs)
+
+    @classmethod
+    def from_json(cls, s: str) -> "Params":
+        """De-serialise from JSON string."""
+        return cls.from_dict(json.loads(s))
+
+
+# utility to map filter-name → parameter-class
+_FILTER_MAP = {
+    "savgol": SavgolParameters,
+    "bandpass": BandpassParameters,
+    "notch": NotchParameters,
+}
+
+
+def _build_filter_param(name: str, payload: dict) -> object:
+    """Construct the correct filter-param dataclass given its *name*."""
+    cls = _FILTER_MAP.get(name)
+    if cls is None:
+        msg = f"Unknown filter type '{name}'."
+        raise ValueError(msg)
+    return cls(**payload)
 
 
 def pretty_duration_humanize(seconds: float) -> str:
@@ -387,19 +481,19 @@ def compute_mean_peak(
     return mean_peak
 
 
-def process_block(data: np.ndarray, rate: float, params: dict):
+def process_block(data: np.ndarray, rate: float, params: Params):
     # Ensure we treat mono data as [n_samples, 1]
     if data.ndim == 1:
         data = np.expand_dims(data, axis=1)
 
     # Apply filtering
-    block_filtered = apply_filter(data, rate, params=params.filters)
+    block_filtered = apply_filters(data, rate, params=params.filters)
 
     # Detect peaks on each channel
     peaks_list, channels_list = detect_peaks(
         block_filtered,
-        mode=params.peaks["mode"],
-        find_peaks_kwargs=params.peaks,
+        mode=params.peaks.mode,
+        find_peaks_kwargs=params.peaks.find_peaks_kwargs,
     )
 
     # Group them
@@ -419,7 +513,6 @@ def process_block(data: np.ndarray, rate: float, params: dict):
     log.info(f"Found a total of {len(grouped_peaks)} peaks")
     if len(grouped_peaks) == 0:
         log.debug(f"Found 0 peaks. Skipping block {blockiterval} for now.")
-        continue
 
     centers = [int(np.mean(g)) for g in grouped_peaks]
 
