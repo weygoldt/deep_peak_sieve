@@ -96,7 +96,7 @@ def main(
 
     log.info("Initializing graphs")
     ui_callbacks.graphs.traces.callbacks_traces(app)
-    ui_callbacks.graphs.probe.callbacks_probe(app)
+    ui_callbacks.graphs.probe.callbacks_sensory_array(app)
 
     # tables.peak_table_window.callbacks_peak_table_window(app)
     app.run(debug=True)

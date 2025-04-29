@@ -1,12 +1,13 @@
 import pathlib
 
-from IPython import embed
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from dash import Input, Output
+from IPython import embed
 from plotly import subplots
 
+import thunderpulse.ui_callbacks.graphs.channel_selection as cs
 from thunderpulse.data_handling.data import load_data
 from thunderpulse.data_handling.preprocessing import (
     preprocessing_current_slice,
@@ -95,25 +96,22 @@ def callbacks_traces(app):
         d = load_data(**filepath)
         time_display = 1
 
-        # probe_frame = nix_file.blocks[0].data_frames["probe_frame"]
-        # channels, channel_length = cs.select_channels(
-        #     channels,
-        #     probe_selected_channels,
-        #     probe_frame,
-        # )
-        # BUG: HARD CODED needs to be dynamic from probe graph
-        # and channel selector
+        channels, channel_length = cs.select_channels(
+            channels,
+            probe_selected_channels,
+            d.sensorarray,
+        )
 
-        if channels.size == 1:
-            channels = np.append(channels, channels[0])
-        channel_length = np.arange(channels[0], channels[1]).shape[0] + 1
-        if channels[0] == channels[1]:
-            channel_length = 1
-        channels = np.arange(channels[0], channels[1] + 1)
-
-        # channels = np.arange(channels)
-        # channel_length = len(channels)
-
+        # if channels.size == 1:
+        #     channels = np.append(channels, channels[0])
+        # channel_length = np.arange(channels[0], channels[1]).shape[0] + 1
+        # if channels[0] == channels[1]:
+        #     channel_length = 1
+        # channels = np.arange(channels[0], channels[1] + 1)
+        #
+        # # channels = np.arange(channels)
+        # # channel_length = len(channels)
+        #
         sliced_data, time_slice = ds.select_data(
             d.data, time_index, time_display, d.metadata.samplerate
         )

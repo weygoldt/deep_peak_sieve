@@ -1,6 +1,7 @@
 import nixio
 import numpy as np
 from dash import Input, Output
+from IPython import embed
 
 from thunderpulse.data_handling.data import load_data
 
@@ -45,20 +46,19 @@ def callbacks(app):
     def update_channels(selected_data, filepaths):
         if not selected_data or not selected_data["points"]:
             return [0, 15]
-        nix_file = nixio.File(filepaths["data_path"], nixio.FileMode.ReadOnly)
-        probe_frame = nix_file.blocks[0].data_frames["probe_frame"]
-        sorted_after_y_pos = np.argsort(probe_frame["y"])
+
+        d = load_data(**filepaths)
+
+        sorted_sensoryarray_y = np.argsort(d.sensorarray.y)
         channels = []
         for items in selected_data["points"]:
             channel_id = items["text"].split(" ")[-1]
             channels.append(int(channel_id))
 
-        order = {key: i for i, key in enumerate(sorted_after_y_pos)}
+        order = {key: i for i, key in enumerate(sorted_sensoryarray_y)}
         channels = np.array(sorted(channels, key=lambda d: order[d]))
 
-        start_channel = np.where(channels[0] == sorted_after_y_pos)[0]
-        stop_channel = np.where(channels[-1] == sorted_after_y_pos)[0]
-
+        start_channel = np.where(channels[0] == sorted_sensoryarray_y)[0]
+        stop_channel = np.where(channels[-1] == sorted_sensoryarray_y)[0]
         channels = np.arange(start_channel.item(), stop_channel.item() + 1)
-        nix_file.close()
         return channels
