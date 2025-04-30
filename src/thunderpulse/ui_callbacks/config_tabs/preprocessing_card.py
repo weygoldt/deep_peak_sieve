@@ -2,6 +2,8 @@ import nixio
 import numpy as np
 from dash import Dash, Input, Output
 
+from thunderpulse.data_handling.data import load_data
+
 
 def callbacks(app: Dash):
     @app.callback(
@@ -13,18 +15,14 @@ def callbacks(app: Dash):
             return None
         if not filepath["data_path"]:
             return None
-        nix_file = nixio.File.open(
-            filepath["data_path"], nixio.FileMode.ReadOnly
-        )
-        probe_frame = nix_file.blocks[0].data_frames["probe_frame"]
-        sorted_y = np.argsort(probe_frame["y"])
-        x = probe_frame["x"][sorted_y]
-        y = probe_frame["y"][sorted_y]
+        d = load_data(**filepath)
+        sorted_y = np.argsort(d.sensorarray.y)
+        x = d.sensorarray.y[sorted_y]
+        y = d.sensorarray.x[sorted_y]
         points = np.vstack((x, y)).T
         differences = points[:, np.newaxis, :] - points[np.newaxis, :, :]
         distances = np.linalg.norm(differences, axis=2)
         minimum = np.sort(distances, axis=0)[1]
-        nix_file.close()
 
         return (
             f"The minimal distance from channel to channel is {minimum[0]} um"

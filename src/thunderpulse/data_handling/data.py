@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-import neo
+import nixio
 import numpy as np
 import numpy.typing as npt
 from audioio import AudioLoader
@@ -55,7 +55,7 @@ class SensorArray:
 class Data:
     """Composition of data and metadata."""
 
-    data: AudioLoader | neo.OpenEphysBinaryIO
+    data: AudioLoader | nixio.DataArray
     metadata: Metadata
     paths: Paths
     sensorarray: SensorArray
@@ -109,8 +109,10 @@ def load_data(data_path: Path | str, probe_path: Path | str) -> Data:
             ),
         )
     else:
-        dataset = neo.OpenEphysBinaryIO(data_path).read(lazy=True)
-        data = dataset[0].segments[0].analogsignals[0]
+        nix_path = list(data_path.rglob("*.nix"))[0]
+        nix_file = nixio.File(str(nix_path), nixio.FileMode.ReadOnly)
+        data = nix_file.blocks[0].data_arrays["data"]
+        sample_rate = data.dimensions[0].sampling_interval
 
         with Path.open(probe_path) as f:
             sensor_array = json.load(f)
@@ -124,9 +126,9 @@ def load_data(data_path: Path | str, probe_path: Path | str) -> Data:
         data_c = Data(
             data,
             Metadata(
-                data.sampling_rate.magnitude,
+                1 / sample_rate,
                 data.shape[1],
-                data.duration.magnitude,
+                data.shape[0] * sample_rate,
                 data.shape[0],
             ),
             Paths(data_path, save_path, probe_path),
