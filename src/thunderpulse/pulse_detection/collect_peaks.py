@@ -1,11 +1,13 @@
 """Main loop to parse large datasets and collect peaks."""
 
-import json
-from dataclasses import dataclass, asdict, field
 import gc
+import json
+import sys
+from collections.abc import Iterator
+from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import Annotated, List, Tuple, Optional, Dict, Any, Iterator
+from typing import Annotated, Any
 
 import humanize
 import numpy as np
@@ -13,15 +15,16 @@ import typer
 from audioio.audioloader import AudioLoader
 from IPython import embed
 from scipy.interpolate import interp1d
-from scipy.signal import find_peaks, savgol_filter
+from scipy.signal import find_peaks
 
-from thunderpulse.data_handling.filters import bandpass_filter, notch_filter
 from thunderpulse.data_handling.data import load_raw_data, save_numpy
 from thunderpulse.utils.loggers import (
     configure_logging,
     get_logger,
     get_progress,
 )
+
+_INDENT = 2  # spaces
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
 log = get_logger(__name__)
@@ -94,7 +97,9 @@ class PeakDetectionParameters:
 
     min_channels: int = 1
     mode: str = "both"  # 'pos', 'neg', 'both'
-    peak_window: int = 10
+    min_peak_distance_s: float = 0.004  # seconds
+    cutout_window_around_peak_s: float = 0.0005  # seconds
+
     find_peaks_kwargs: FindPeaksKwargs = field(
         default_factory=lambda: FindPeaksKwargs(height=0.001)
     )
@@ -160,14 +165,19 @@ class Params:
                 filter_params=[
                     _build_filter_param(pname, pobj)
                     for pname, pobj in zip(
-                        d["filters"]["filters"], d["filters"]["filter_params"]
+                        d["filters"]["filters"],
+                        d["filters"]["filter_params"],
+                        strict=False,
                     )
                 ],
             ),
             peaks=PeakDetectionParameters(
                 min_channels=d["peaks"]["min_channels"],
                 mode=d["peaks"]["mode"],
-                peak_window=d["peaks"]["peak_window"],
+                min_peak_distance_s=d["peaks"]["min_peak_distance_s"],
+                cutout_window_around_peak_s=d["peaks"][
+                    "cutout_window_around_peak_s"
+                ],
                 find_peaks_kwargs=FindPeaksKwargs(
                     **d["peaks"]["find_peaks_kwargs"]
                 ),
@@ -200,6 +210,84 @@ def _build_filter_param(name: str, payload: dict) -> object:
         msg = f"Unknown filter type '{name}'."
         raise ValueError(msg)
     return cls(**payload)
+
+
+def _fmt_scalar(x: Any) -> str:
+    if isinstance(x, (Path, str)):
+        return f'"{x}"'
+    if isinstance(x, float):
+        return f"{x:.6g}"
+    if isinstance(x, np.ndarray):
+        if x.size > 10:  # large array → just shape
+            return f"<ndarray shape={x.shape} dtype={x.dtype}>"
+        return np.array2string(x, separator=",", precision=3)
+    return str(x)
+
+
+def _pretty(obj: Any, level: int) -> str:
+    pad = " " * (_INDENT * level)
+
+    # ── dataclass ──────────────────────────────────────────────────────────
+    if is_dataclass(obj):
+        cls_name = obj.__class__.__name__
+        lines = [f"{pad}{cls_name}:"]
+        for f in fields(obj):
+            val = getattr(obj, f.name)
+            child = _pretty(val, level + 1)
+            if isinstance(val, (list, dict)) or is_dataclass(val):
+                lines.append(f"{pad}{' ' * _INDENT}{f.name}:")
+                lines.append(child)
+            else:
+                lines.append(
+                    f"{pad}{' ' * _INDENT}{f.name}: {_fmt_scalar(val)}"
+                )
+        return "\n".join(lines)
+
+    # ── list / tuple ───────────────────────────────────────────────────────
+    if isinstance(obj, (list, tuple)):
+        if not obj:
+            return f"{pad}[]"
+        lines = []
+        for item in obj:
+            child = _pretty(item, level + 1)
+            bullet = "-" if not isinstance(item, (list, dict)) else ""
+            if bullet:
+                lines.append(f"{pad}{bullet} {_fmt_scalar(item)}")
+            else:
+                lines.append(f"{pad}-")
+                lines.append(child)
+        return "\n".join(lines)
+
+    # ── dict ───────────────────────────────────────────────────────────────
+    if isinstance(obj, dict):
+        if not obj:
+            return f"{pad}{{}}"
+        lines = []
+        for k, v in obj.items():
+            child = _pretty(v, level + 1)
+            if isinstance(v, (list, dict)) or is_dataclass(v):
+                lines.append(f"{pad}{k}:")
+                lines.append(child)
+            else:
+                lines.append(f"{pad}{k}: {_fmt_scalar(v)}")
+        return "\n".join(lines)
+
+    # ── fall-back scalar ───────────────────────────────────────────────────
+    return f"{pad}{_fmt_scalar(obj)}"
+
+
+def pretty_print_config(cfg: Any, *, file=sys.stdout) -> None:
+    """
+    Nicely display a nested dataclass configuration in the shell.
+
+    Parameters
+    ----------
+    cfg
+        Instance of your root configuration dataclass (e.g. ``Params()``).
+    file
+        Stream to write to (defaults to ``sys.stdout``).
+    """
+    print(_pretty(cfg, 0), file=file)
 
 
 def pretty_duration_humanize(seconds: float) -> str:
@@ -238,7 +326,7 @@ def apply_filters(
         return data
     if len(params.filters) == 1:
         log.debug(f"Applying filter: {params.filters[0]}")
-        return filter_methods[params.filters[0]](
+        return _FILTER_MAP[params.filters[0]](
             data,
             **params.filter_params[0],
             fs=rate,
@@ -250,7 +338,7 @@ def apply_filters(
         strict=True,
     ):
         log.debug(f"Applying filter: {filter_name}")
-        data = filter_methods[filter_name](
+        data = _FILTER_MAP[filter_name](
             data,
             **filter_params,
             fs=rate,
@@ -261,7 +349,7 @@ def apply_filters(
 def detect_peaks(
     block: np.ndarray,
     mode: str = "both",
-    find_peaks_kwargs: dict | None = None,
+    find_peaks_kwargs: FindPeaksKwargs | None = None,
 ) -> tuple[list[np.ndarray], list[np.ndarray]]:
     """Detect peaks in 1D signal.
 
@@ -299,7 +387,9 @@ def detect_peaks(
         pos_peaks, _ = (
             find_peaks(
                 signal,
-                **(find_peaks_kwargs or {}),
+                **find_peaks_kwargs.to_kwargs(keep_none=True)
+                if find_peaks_kwargs
+                else {},
             )
             if mode in {"peak", "both"}
             else (np.empty(0, dtype=int), None)
@@ -308,7 +398,9 @@ def detect_peaks(
         neg_peaks, _ = (
             find_peaks(
                 -signal,
-                **(find_peaks_kwargs or {}),
+                **find_peaks_kwargs.to_kwargs(keep_none=True)
+                if find_peaks_kwargs
+                else {},
             )
             if mode in {"trough", "both"}
             else (np.empty(0, dtype=int), None)
@@ -481,13 +573,25 @@ def compute_mean_peak(
     return mean_peak
 
 
-def process_block(data: np.ndarray, rate: float, params: Params):
+def process_block(
+    input_data: np.ndarray, rate: float, params: Params, blockinfo: dict
+):
+    output_data = {
+        "peaks": [],
+        "channels": [],
+        "amplitudes": [],
+        "centers": [],
+        "start_stop_index": [],
+    }
+
     # Ensure we treat mono data as [n_samples, 1]
-    if data.ndim == 1:
-        data = np.expand_dims(data, axis=1)
+    if input_data.ndim == 1:
+        input_data = np.expand_dims(input_data, axis=1)
+
+    n_channels = input_data.shape[1]
 
     # Apply filtering
-    block_filtered = apply_filters(data, rate, params=params.filters)
+    block_filtered = apply_filters(input_data, rate, params=params.filters)
 
     # Detect peaks on each channel
     peaks_list, channels_list = detect_peaks(
@@ -496,48 +600,55 @@ def process_block(data: np.ndarray, rate: float, params: Params):
         find_peaks_kwargs=params.peaks.find_peaks_kwargs,
     )
 
+    # Convert config paramters from seconds to samples
+    min_peak_distance = int(np.ceil(params.peaks.min_peak_distance_s * rate))
+    cutout_window_around_peak = int(
+        np.ceil(params.peaks.cutout_window_around_peak_s * rate)
+    )
+
     # Group them
     grouped_peaks, grouped_channels = group_peaks_across_channels_by_time(
         peaks_list,
         channels_list,
-        # peak_window=int(min_peak_distance // 2),
-        peak_window=params.peaks["peak_window"],
+        peak_window=min_peak_distance,
     )
 
     # Filter out groups that do not meet the threshold
     grouped_peaks, grouped_channels = filter_peak_groups(
-        grouped_peaks, grouped_channels, params.peaks["min_channels"]
+        grouped_peaks, grouped_channels, params.peaks.min_channels
     )
 
     # Compute means of each group
     log.info(f"Found a total of {len(grouped_peaks)} peaks")
     if len(grouped_peaks) == 0:
-        log.debug(f"Found 0 peaks. Skipping block {blockiterval} for now.")
+        log.debug(
+            f"Found 0 peaks. Skipping block {blockinfo["blockiterval"]} for now."
+        )
+        return
 
     centers = [int(np.mean(g)) for g in grouped_peaks]
 
     # For each peak group, compute & store waveform
-    for peakiterval, (pks, chans, center) in enumerate(
+    peak_counter = 0
+    for _, (pks, chans, center) in enumerate(
         zip(grouped_peaks, grouped_channels, centers, strict=False)
     ):
         chans = np.array(chans)
-        if chans.dtype not in [np.int32, np.int64, np.bool]:
-            # This should not happen, but just in case
-            log.warning(
-                f"Channel type is not int32 or int64 but {chans.dtype}. Converting to int64."
-            )
-            chans = np.array(chans, dtype=np.int64)
-
         pks = np.array(pks)
+
+        if chans.dtype not in [np.int32, np.int64, np.bool]:
+            msg = f"Channel variable type ('chans') is not int32 or int64 but {chans.dtype}"
+            raise TypeError(msg)
+
         if pks.dtype not in [np.int32, np.int64]:
-            # This should not happen, but just in case
-            log.warning(
-                f"Peak type is not int32 or int64 but {pks.dtype}. Converting to int64."
-            )
-            pks = np.array(pks, dtype=np.int64)
+            msg = "Peak variable type ('pks') is not int32 or int64 but {pks.dtype}"
+            raise TypeError(msg)
 
         mean_peak = compute_mean_peak(
-            block_filtered, center, chans, around_peak_window
+            block_filtered,
+            center,
+            chans,
+            cutout_window_around_peak,
         )
 
         if (mean_peak is None) or (len(chans) == 0):
@@ -546,50 +657,44 @@ def process_block(data: np.ndarray, rate: float, params: Params):
             continue
 
         # Resample mean peak
-        if resample:
+        if params.resample.enabled:
             log.debug("Resampling mean peak")
             x = np.linspace(0, len(mean_peak), len(mean_peak))
             f = interp1d(x, mean_peak, kind="cubic")
-            xnew = np.linspace(0, len(mean_peak), n_resamples)
+            xnew = np.linspace(0, len(mean_peak), params.resample.n_resamples)
             mean_peak = f(xnew)
 
         # Mark which channels contributed
-        bool_channels = np.zeros(data.channels, dtype=bool)
+        bool_channels = np.zeros(n_channels, dtype=bool)
         bool_channels[chans] = True
-
-        # print("-------------------------------------")
-        # print("data.channels:")
-        # print(data.channels)
-        # print("pks:")
-        # print(pks)
-        # print("chans:")
-        # print(chans)
-        # print("block_filtered.shape:")
-        # print(block_filtered.shape)
 
         # Amplitudes on each channel
         amp_index = np.array(
             [
                 np.argmax(np.abs(block_filtered[pks, ch]))
-                for ch in range(data.channels)
+                for ch in range(n_channels)
             ]
         )
         amps = np.array(
             [block_filtered[pks, ch][idx] for ch, idx in enumerate(amp_index)]
         )
 
-        center += blockiterval * (blocksize - overlap)
+        center = center + blockinfo["blockiterval"] * (
+            blockinfo["blocksize"] - blockinfo["overlap"]
+        )
         start_stop_index = [
-            center - around_peak_window,
-            center + around_peak_window,
+            center - cutout_window_around_peak,
+            center + cutout_window_around_peak,
         ]
-        dataset["peaks"].append(mean_peak)
-        dataset["channels"].append(bool_channels)
-        dataset["amplitudes"].append(amps)
-        dataset["centers"].append(center)
-        dataset["start_stop_index"].append(start_stop_index)
-        collected_peak_counter += 1
-    pass
+
+        peak_counter += 1
+        output_data["peaks"].append(mean_peak)
+        output_data["channels"].append(bool_channels)
+        output_data["amplitudes"].append(amps)
+        output_data["centers"].append(center)
+        output_data["start_stop_index"].append(start_stop_index)
+
+    return output_data, peak_counter
 
 
 def process_file(
@@ -616,6 +721,7 @@ def process_file(
     # Configuration
     min_peak_distance = int(np.ceil(peak_distance_s * data.rate))
     around_peak_window = int(np.round(0.75 * min_peak_distance))
+
     window_length = int(np.ceil(smoothing_window_s * data.rate))
     polyorder = 3
     filtering_params = dict(
@@ -646,14 +752,28 @@ def process_file(
     dataset = initialize_dataset()
     collected_peak_counter = 0
     dataset_counter = 0
+    params = Params()
 
     num_blocks = int(np.ceil(data.shape[0] / (blocksize - overlap)))
     with get_progress() as pbar:
         desc = "Processing file"
         task = pbar.add_task(desc, total=num_blocks, transient=True)
         for blockiterval, block in enumerate(
-            data.blocks(block_size=blocksize, noverlap=overlap)
+            data.blocks(
+                block_size=blocksize, noverlap=overlap
+            )  # TODO: Implement the .blocks() method for our dataset class
         ):
+            blockinfo = {
+                "blockiterval": blockiterval,
+                "blocksize": blocksize,
+                "overlap": overlap,
+            }
+            block_peaks, peak_counter = process_block(
+                block, rate, params, blockinfo
+            )
+            log.info(
+                f"Processed block {blockiterval} with {peak_counter} peaks detected."
+            )
             pbar.update(task, advance=1)
 
         dataset["peaks"] = np.array(dataset["peaks"])
@@ -726,6 +846,9 @@ def main(
     5) Waveform extraction
     6) Dataset saving
     """
+    params = Params()
+    pretty_print_config(params)
+    exit()
     configure_logging(verbosity=verbose)
     file_list, save_list = load_raw_data(path=datapath, filetype=filetype)
     for data, save_path in zip(file_list, save_list, strict=False):
@@ -751,3 +874,7 @@ def main(
             resample,
             n_resamples,
         )
+
+
+if __name__ == "__main__":
+    app()
