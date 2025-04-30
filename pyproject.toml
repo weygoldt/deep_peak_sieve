@@ -51,7 +51,7 @@ gui = "thunderpulse.app:main"
 
 
 [tool.ruff]
-line-length = 79
+line-length = 99
 
 [tool.ruff.lint]
 select = [

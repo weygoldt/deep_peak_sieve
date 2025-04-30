@@ -60,9 +60,10 @@ class Data:
     sensorarray: SensorArray
 
 
-def load_data(
-    data_path: Path | str, save_path: Path | str, probe_path: Path | str
-) -> Data:
+# TODO: Add functionality to load ephys data also from meta dataset (e.g. folder with many nix files)
+
+
+def load_data(data_path: Path | str, save_path: Path | str, probe_path: Path | str) -> Data:
     """Load OpenEphys or WAV data from the specified path."""
     data_path = Path(data_path)
     save_path = Path(save_path)
@@ -74,9 +75,7 @@ def load_data(
         with Path.open(probe_path) as f:
             seonsory_array = json.load(f)
 
-        file_list, _, dtype = get_file_list(
-            data_path, "wav", make_save_path=False
-        )
+        file_list, _, dtype = get_file_list(data_path, "wav", make_save_path=False)
         log.debug(f"File list: {file_list}")
         if isinstance(file_list[0], list):
             msg = (
@@ -111,9 +110,7 @@ def load_data(
         ids = np.array(sensor_array["probes"][0]["device_channel_indices"])
         coordinates = np.array(sensor_array["probes"][0]["contact_positions"])
         if coordinates.shape[1] != 3:
-            coordinates = np.hstack(
-                (coordinates, np.zeros_like(coordinates[:, 0]).reshape(-1, 1))
-            )
+            coordinates = np.hstack((coordinates, np.zeros_like(coordinates[:, 0]).reshape(-1, 1)))
 
         data_c = Data(
             data,
@@ -124,17 +121,13 @@ def load_data(
                 data.shape[0],
             ),
             Paths(data_path, save_path, probe_path),
-            SensorArray(
-                ids, coordinates[:, 0], coordinates[:, 1], coordinates[:, 2]
-            ),
+            SensorArray(ids, coordinates[:, 0], coordinates[:, 1], coordinates[:, 2]),
         )
 
     return data_c
 
 
-def get_file_list(
-    path: Path, filetype: str = "wav", make_save_path: bool = True
-) -> tuple:
+def get_file_list(path: Path, filetype: str = "wav", make_save_path: bool = True) -> tuple:
     """Discover the type of WAV dataset based on the provided path."""
     file_list = []
     save_list = []
@@ -165,12 +158,8 @@ def get_file_list(
                     if make_save_path:
                         sub_save_dir.mkdir(exist_ok=True)
                     file_list.append(sub_file_list)
-                    save_file_names = [
-                        file.stem + "_peaks" for file in sub_file_list
-                    ]
-                    save_list.append(
-                        [sub_save_dir / name for name in save_file_names]
-                    )
+                    save_file_names = [file.stem + "_peaks" for file in sub_file_list]
+                    save_list.append([sub_save_dir / name for name in save_file_names])
         else:
             msg = f"Path {path} is a directory but contains no .wav files."
             raise ValueError(msg)
@@ -182,10 +171,7 @@ def get_file_list(
         save_name = path.stem + "_peaks.npy"
         save_list = [path.parent / save_name]
         return file_list, save_list, "file"
-    msg = (
-        f"Path {path} is not a valid file or directory. "
-        + "Please provide a valid path."
-    )
+    msg = f"Path {path} is not a valid file or directory. " + "Please provide a valid path."
     raise ValueError(msg)
 
 
@@ -204,10 +190,7 @@ def load_raw_data(path: Path, filetype: str = "wav") -> tuple:
                 data.append(str(file))
                 savelist.append(savefile)
         return data, savelist
-    msg = (
-        f"Path {path} is not a valid file or directory. "
-        + "Please provide a valid path."
-    )
+    msg = f"Path {path} is not a valid file or directory. " + "Please provide a valid path."
     raise ValueError(msg)
 
 

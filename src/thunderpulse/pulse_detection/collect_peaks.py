@@ -15,9 +15,13 @@ import typer
 from audioio.audioloader import AudioLoader
 from IPython import embed
 from scipy.interpolate import interp1d
-from scipy.signal import find_peaks
+from scipy.signal import find_peaks, savgol_filter
 
 from thunderpulse.data_handling.data import load_raw_data, save_numpy
+from thunderpulse.data_handling.filters import (
+    bandpass_filter,
+    notch_filter,
+)
 from thunderpulse.utils.loggers import (
     configure_logging,
     get_logger,
@@ -41,7 +45,6 @@ class FindPeaksKwargs:
     prominence: float | np.ndarray | None = None
     width: float | np.ndarray | None = None
 
-    # ----------------------------------------------------------------- helpers
     def to_kwargs(self, *, keep_none: bool = False) -> dict[str, Any]:
         """Convert to plain ``dict`` suitable for ``scipy.signal.find_peaks``.
 
@@ -59,7 +62,6 @@ class FindPeaksKwargs:
             d = {k: v for k, v in d.items() if v is not None}
         return d
 
-    # optional: make the object directly “expandable” via ** operator
     def __iter__(self) -> Iterator[tuple[str, Any]]:
         """Allow ``dict(fp_kwargs)`` or ``**dict(fp_kwargs)``."""
         yield from self.to_kwargs().items()
@@ -75,7 +77,7 @@ class SavgolParameters:
 
 @dataclass
 class BandpassParameters:
-    """IIR/FIR band-pass filter parameters."""
+    """Band-pass filter parameters."""
 
     lowcut: float = 0.1
     highcut: float = 3_000.0
@@ -96,8 +98,8 @@ class PeakDetectionParameters:
     """Wrapper around *find_peaks* plus global peak-group criteria."""
 
     min_channels: int = 1
-    mode: str = "both"  # 'pos', 'neg', 'both'
-    min_peak_distance_s: float = 0.004  # seconds
+    mode: str = "both"  # 'peak', 'trough', 'both'
+    min_peak_distance_s: float = 0.001  # seconds
     cutout_window_around_peak_s: float = 0.0005  # seconds
 
     find_peaks_kwargs: FindPeaksKwargs = field(
@@ -115,9 +117,7 @@ class FiltersParameters:
     """
 
     filters: list[str] = field(default_factory=lambda: ["savgol"])
-    filter_params: list[object] = field(
-        default_factory=lambda: [SavgolParameters()]
-    )
+    filter_params: list[object] = field(default_factory=lambda: [SavgolParameters()])
 
 
 @dataclass
@@ -145,9 +145,7 @@ class Params:
     """
 
     filters: FiltersParameters = field(default_factory=FiltersParameters)
-    peaks: PeakDetectionParameters = field(
-        default_factory=PeakDetectionParameters
-    )
+    peaks: PeakDetectionParameters = field(default_factory=PeakDetectionParameters)
     resample: ResampleParameters = field(default_factory=ResampleParameters)
 
     # ── (de)serialisation helpers ──────────────────────────────────────
@@ -175,12 +173,8 @@ class Params:
                 min_channels=d["peaks"]["min_channels"],
                 mode=d["peaks"]["mode"],
                 min_peak_distance_s=d["peaks"]["min_peak_distance_s"],
-                cutout_window_around_peak_s=d["peaks"][
-                    "cutout_window_around_peak_s"
-                ],
-                find_peaks_kwargs=FindPeaksKwargs(
-                    **d["peaks"]["find_peaks_kwargs"]
-                ),
+                cutout_window_around_peak_s=d["peaks"]["cutout_window_around_peak_s"],
+                find_peaks_kwargs=FindPeaksKwargs(**d["peaks"]["find_peaks_kwargs"]),
             ),
             resample=ResampleParameters(**d["resample"]),
         )
@@ -197,9 +191,9 @@ class Params:
 
 # utility to map filter-name → parameter-class
 _FILTER_MAP = {
-    "savgol": SavgolParameters,
-    "bandpass": BandpassParameters,
-    "notch": NotchParameters,
+    "savgol": savgol_filter,
+    "bandpass": bandpass_filter,
+    "notch": notch_filter,
 }
 
 
@@ -238,9 +232,7 @@ def _pretty(obj: Any, level: int) -> str:
                 lines.append(f"{pad}{' ' * _INDENT}{f.name}:")
                 lines.append(child)
             else:
-                lines.append(
-                    f"{pad}{' ' * _INDENT}{f.name}: {_fmt_scalar(val)}"
-                )
+                lines.append(f"{pad}{' ' * _INDENT}{f.name}: {_fmt_scalar(val)}")
         return "\n".join(lines)
 
     # ── list / tuple ───────────────────────────────────────────────────────
@@ -308,9 +300,7 @@ def initialize_dataset() -> dict:
     }
 
 
-def apply_filters(
-    data: np.ndarray, rate: float, params: FiltersParameters
-) -> np.ndarray:
+def apply_filters(data: np.ndarray, rate: float, params: FiltersParameters) -> np.ndarray:
     """Apply the specified filters to the data."""
     if not isinstance(params.filters, list):
         msg = "Filters must be a list of strings"
@@ -378,33 +368,24 @@ def detect_peaks(
 
     log.debug(f"Starting peak detection with mode: {mode}")
 
-    peaks_list: list[np.ndarray] = []
-    channels_list: list[np.ndarray] = []
+    peaks_list = []
+    channels_list = []
 
     for ch in range(block.shape[1]):
         signal = block[:, ch]
 
-        pos_peaks, _ = (
-            find_peaks(
-                signal,
-                **find_peaks_kwargs.to_kwargs(keep_none=True)
-                if find_peaks_kwargs
-                else {},
-            )
-            if mode in {"peak", "both"}
-            else (np.empty(0, dtype=int), None)
-        )
+        if find_peaks_kwargs:
+            peak_params = find_peaks_kwargs.to_kwargs(keep_none=True)
+        else:
+            peak_params = {}
 
-        neg_peaks, _ = (
-            find_peaks(
-                -signal,
-                **find_peaks_kwargs.to_kwargs(keep_none=True)
-                if find_peaks_kwargs
-                else {},
-            )
-            if mode in {"trough", "both"}
-            else (np.empty(0, dtype=int), None)
-        )
+        neg_peaks = np.empty(0, dtype=int)
+        pos_peaks = np.empty(0, dtype=int)
+
+        if mode in {"peak", "both"}:
+            pos_peaks, _ = find_peaks(signal, **peak_params)
+        if mode in {"trough", "both"}:
+            neg_peaks, _ = find_peaks(-signal, **peak_params)
 
         # concatenate & sort to preserve chronological order
         peaks_ch = np.sort(np.concatenate((pos_peaks, neg_peaks)))
@@ -417,9 +398,7 @@ def detect_peaks(
 
 
 def group_peaks_across_channels_by_time(
-    peaks: list[np.ndarray],
-    channels: list[np.ndarray],
-    peak_window: int = 10,
+    peaks: list[np.ndarray], channels: list[np.ndarray], peak_window: int = 10
 ) -> tuple:
     """Group peaks that lie within a certain distance (peak_window).
 
@@ -443,9 +422,7 @@ def group_peaks_across_channels_by_time(
     for p, c in zip(peaks[1:], channels[1:], strict=False):
         # Check if the current peak is within the peak_window of the last peak
         # in the current group, and if channel is new
-        if ((p - current_group[-1]) < peak_window) and (
-            c not in current_channels
-        ):
+        if ((p - current_group[-1]) < peak_window) and (c not in current_channels):
             current_group.append(p)
             current_channels.append(c)
         else:
@@ -541,14 +518,13 @@ def compute_mean_peak(
     peak_snippet -= baselines
 
     # Extract sign of strongest deviation
-    signs = np.array(
-        [1 if s[np.argmax(np.abs(s))] > 0 else -1 for s in peak_snippet.T]
-    )
+    signs = np.array([1 if s[np.argmax(np.abs(s))] > 0 else -1 for s in peak_snippet.T])
 
     # Flip sign according to majority polarity
     # TODO: This does not work sometimes, maybe due to noise? For single peak pulses
     # this works well but for multiphase peaks we should check the order of signs
     # of each single peak instead of the maximum because the maximum is subject to noise
+
     if np.all(signs > 0):
         log.debug("All peaks are positive")
         mean_peak = np.mean(peak_snippet, axis=1)
@@ -573,9 +549,7 @@ def compute_mean_peak(
     return mean_peak
 
 
-def process_block(
-    input_data: np.ndarray, rate: float, params: Params, blockinfo: dict
-):
+def process_block(input_data: np.ndarray, rate: float, params: Params, blockinfo: dict):
     output_data = {
         "peaks": [],
         "channels": [],
@@ -602,11 +576,11 @@ def process_block(
 
     # Convert config paramters from seconds to samples
     min_peak_distance = int(np.ceil(params.peaks.min_peak_distance_s * rate))
-    cutout_window_around_peak = int(
-        np.ceil(params.peaks.cutout_window_around_peak_s * rate)
-    )
+    cutout_window_around_peak = int(np.ceil(params.peaks.cutout_window_around_peak_s * rate))
 
-    # Group them
+    # TODO: Electrode distance sorting from Alex
+
+    # Group peaks across channels when they are close in time
     grouped_peaks, grouped_channels = group_peaks_across_channels_by_time(
         peaks_list,
         channels_list,
@@ -614,17 +588,17 @@ def process_block(
     )
 
     # Filter out groups that do not meet the threshold
-    grouped_peaks, grouped_channels = filter_peak_groups(
-        grouped_peaks, grouped_channels, params.peaks.min_channels
-    )
+    if params.peaks.min_channels > 1:
+        grouped_peaks, grouped_channels = filter_peak_groups(
+            grouped_peaks, grouped_channels, params.peaks.min_channels
+        )
 
     # Compute means of each group
     log.info(f"Found a total of {len(grouped_peaks)} peaks")
+
     if len(grouped_peaks) == 0:
-        log.debug(
-            f"Found 0 peaks. Skipping block {blockinfo["blockiterval"]} for now."
-        )
-        return
+        log.debug(f"Found 0 peaks. Skipping block {blockinfo['blockiterval']} for now.")
+        return None
 
     centers = [int(np.mean(g)) for g in grouped_peaks]
 
@@ -670,14 +644,9 @@ def process_block(
 
         # Amplitudes on each channel
         amp_index = np.array(
-            [
-                np.argmax(np.abs(block_filtered[pks, ch]))
-                for ch in range(n_channels)
-            ]
+            [np.argmax(np.abs(block_filtered[pks, ch])) for ch in range(n_channels)]
         )
-        amps = np.array(
-            [block_filtered[pks, ch][idx] for ch, idx in enumerate(amp_index)]
-        )
+        amps = np.array([block_filtered[pks, ch][idx] for ch, idx in enumerate(amp_index)])
 
         center = center + blockinfo["blockiterval"] * (
             blockinfo["blocksize"] - blockinfo["overlap"]
@@ -726,9 +695,7 @@ def process_file(
     polyorder = 3
     filtering_params = dict(
         mode="savgol",
-        window_length=window_length
-        if window_length > polyorder
-        else polyorder + 1,
+        window_length=window_length if window_length > polyorder else polyorder + 1,
         polyorder=3,
     )
 
@@ -768,14 +735,11 @@ def process_file(
                 "blocksize": blocksize,
                 "overlap": overlap,
             }
-            block_peaks, peak_counter = process_block(
-                block, rate, params, blockinfo
-            )
-            log.info(
-                f"Processed block {blockiterval} with {peak_counter} peaks detected."
-            )
+            block_peaks, peak_counter = process_block(block, rate, params, blockinfo)
+            log.info(f"Processed block {blockiterval} with {peak_counter} peaks detected.")
             pbar.update(task, advance=1)
 
+        # TODO: Fix to work with current function output
         dataset["peaks"] = np.array(dataset["peaks"])
         dataset["channels"] = np.array(dataset["channels"])
         dataset["amplitudes"] = np.array(dataset["amplitudes"])
@@ -783,8 +747,9 @@ def process_file(
         dataset["start_stop_index"] = np.array(dataset["start_stop_index"])
         dataset["rate"] = data.rate
 
+        # TODO: Nix instead of Numpy
         save_numpy(dataset, save_path)
-        gc.collect()
+        gc.collect()  # TODO: Check if this has actually an effect
 
 
 @app.command()
@@ -800,15 +765,11 @@ def main(
     ] = 60,
     min_channels_with_peaks: Annotated[
         int,
-        typer.Option(
-            "--min_channels", "-mc", help="Minimum channels with peaks."
-        ),
+        typer.Option("--min_channels", "-mc", help="Minimum channels with peaks."),
     ] = 4,
     smoothing_window_s: Annotated[
         float,
-        typer.Option(
-            "--smoothing_window", "-sw", help="Smoothing window in seconds."
-        ),
+        typer.Option("--smoothing_window", "-sw", help="Smoothing window in seconds."),
     ] = 0.0001,
     peak_distance_s: Annotated[
         float,
@@ -826,9 +787,7 @@ def main(
             help="Minimum height of peaks in amplitude.",
         ),
     ] = 0.001,
-    resample: Annotated[
-        bool, typer.Option("--resample", "-r", help="Resample the data.")
-    ] = True,
+    resample: Annotated[bool, typer.Option("--resample", "-r", help="Resample the data.")] = True,
     n_resamples: Annotated[
         int, typer.Option("--n_resamples", "-nr", help="Number of resamples.")
     ] = 512,
@@ -849,8 +808,10 @@ def main(
     params = Params()
     pretty_print_config(params)
     exit()
+
     configure_logging(verbosity=verbose)
     file_list, save_list = load_raw_data(path=datapath, filetype=filetype)
+
     for data, save_path in zip(file_list, save_list, strict=False):
         # Skip if file already exists and overwrite is not set
         if save_path.with_suffix(".npz").exists() and not overwrite:
