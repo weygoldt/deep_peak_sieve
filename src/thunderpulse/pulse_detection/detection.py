@@ -4,23 +4,20 @@ import gc
 from datetime import timedelta
 from pathlib import Path
 from typing import Annotated
-import json
 
 import humanize
 import numpy as np
 import typer
-from audioio.audioloader import AudioLoader
 from IPython import embed
 from scipy.interpolate import interp1d
 from scipy.signal import find_peaks
 
-from thunderpulse.data_handling.data import load_data, get_file_list, Data
+from thunderpulse.data_handling.data import Data, load_data
 from thunderpulse.pulse_detection.config import (
     FiltersParameters,
     FindPeaksKwargs,
     Params,
     filter_map,
-    pretty_print_config,
 )
 from thunderpulse.utils.loggers import (
     configure_logging,
@@ -487,7 +484,6 @@ def main(
     5) Waveform extraction
     6) Dataset saving
     """
-
     configure_logging(verbosity=verbose)
 
     params = Params().from_json(str(configpath))

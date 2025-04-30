@@ -64,9 +64,8 @@ class Data:
         if isinstance(self.data, AudioLoader):
             return self.data.blocks(blocksize, overlap)
 
-        else:
-            msg = "Blocked loading implemented for OpenEphysBinaryIO yet."
-            raise NotImplementedError(msg)
+        msg = "Blocked loading implemented for OpenEphysBinaryIO yet."
+        raise NotImplementedError(msg)
 
 
 # TODO: Add functionality to load ephys data also from meta dataset (e.g. folder with many nix files)

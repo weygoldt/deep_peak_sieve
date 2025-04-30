@@ -209,7 +209,7 @@ class Params:
     @classmethod
     def from_json(cls, s: str) -> "Params":
         """De-serialise from JSON string."""
-        with open(s, "r") as f:
+        with open(s) as f:
             json_file = json.loads(f.read())
         return cls.from_dict(json_file)
 
