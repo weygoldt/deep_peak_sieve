@@ -1,0 +1,276 @@
+"""Objects to serialize and deserialize detector configuration."""
+
+import json
+import sys
+from collections.abc import Iterator
+from dataclasses import asdict, dataclass, field, fields, is_dataclass
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+from scipy.signal import savgol_filter
+
+from thunderpulse.data_handling.filters import (
+    bandpass_filter,
+    notch_filter,
+)
+
+_INDENT = 2
+
+
+# leaf-level parameter blocks
+@dataclass(slots=True)
+class FindPeaksKwargs:
+    """Arguments forwarded to :func:`scipy.signal.find_peaks`."""
+
+    height: float | np.ndarray | None = None
+    threshold: float | np.ndarray | None = None
+    distance: float | None = None
+    prominence: float | np.ndarray | None = None
+    width: float | np.ndarray | None = None
+
+    def to_kwargs(self, *, keep_none: bool = False) -> dict[str, Any]:
+        """Convert to plain ``dict`` suitable for ``scipy.signal.find_peaks``.
+
+        By default keys whose value is ``None`` are dropped.
+
+        Examples
+        --------
+        >>> fp = FindPeaksKwargs(height=0.5, prominence=None)
+        >>> fp.to_kwargs()
+        {'height': 0.5}
+        >>> signal.find_peaks(x, **fp.to_kwargs())
+        """
+        d = asdict(self)
+        if not keep_none:
+            d = {k: v for k, v in d.items() if v is not None}
+        return d
+
+    def __iter__(self) -> Iterator[tuple[str, Any]]:
+        """Allow ``dict(fp_kwargs)`` or ``**dict(fp_kwargs)``."""
+        yield from self.to_kwargs().items()
+
+
+@dataclass
+class SavgolParameters:
+    """Savitzky–Golay filter parameters."""
+
+    window_length: int = 5
+    polyorder: int = 3
+
+
+@dataclass
+class BandpassParameters:
+    """Band-pass filter parameters."""
+
+    lowcut: float = 0.1
+    highcut: float = 3_000.0
+    order: int = 5
+
+
+@dataclass
+class NotchParameters:
+    """Notch filter (single frequency) parameters."""
+
+    notch_freq: float = 50.0
+    quality_factor: float = 30.0
+
+
+# higher-level blocks
+@dataclass
+class PeakDetectionParameters:
+    """Wrapper around *find_peaks* plus global peak-group criteria."""
+
+    min_channels: int = 1
+    mode: str = "both"  # 'peak', 'trough', 'both'
+    min_peak_distance_s: float = 0.001  # seconds
+    cutout_window_around_peak_s: float = 0.0005  # seconds
+
+    find_peaks_kwargs: FindPeaksKwargs = field(
+        default_factory=lambda: FindPeaksKwargs(height=0.001)
+    )
+
+
+@dataclass
+class FiltersParameters:
+    """
+    Arbitrary sequence of filters.
+
+    *filters* is a list of **names**; *filter_params* holds a *parallel* list of
+    parameter objects (must be the same length / order).
+    """
+
+    filters: list[str] = field(default_factory=lambda: ["savgol"])
+    filter_params: list[object] = field(
+        default_factory=lambda: [SavgolParameters()]
+    )
+
+
+@dataclass
+class ResampleParameters:
+    """Zero-hold / FFT resampling settings."""
+
+    enabled: bool = True
+    n_resamples: int = 512
+
+
+# root config
+@dataclass
+class Params:
+    """
+    Full preprocessing configuration.
+
+    Attributes
+    ----------
+    filters
+        Definition & parameters of the DSP filter pipeline.
+    peaks
+        Peak detection settings.
+    resample
+        Resampling settings.
+    """
+
+    filters: FiltersParameters = field(default_factory=FiltersParameters)
+    peaks: PeakDetectionParameters = field(
+        default_factory=PeakDetectionParameters
+    )
+    resample: ResampleParameters = field(default_factory=ResampleParameters)
+
+    # ── (de)serialisation helpers ──────────────────────────────────────
+    def to_dict(self) -> dict:
+        """Deep-convert to plain Python containers (JSON-safe)."""
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Params":
+        """Re-build :class:`Params` from *asdict*-style dict."""
+        # manual reconstruction because nested dataclasses are involved
+        return cls(
+            filters=FiltersParameters(
+                filters=d["filters"]["filters"],
+                filter_params=[
+                    _build_filter_param(pname, pobj)
+                    for pname, pobj in zip(
+                        d["filters"]["filters"],
+                        d["filters"]["filter_params"],
+                        strict=False,
+                    )
+                ],
+            ),
+            peaks=PeakDetectionParameters(
+                min_channels=d["peaks"]["min_channels"],
+                mode=d["peaks"]["mode"],
+                min_peak_distance_s=d["peaks"]["min_peak_distance_s"],
+                cutout_window_around_peak_s=d["peaks"][
+                    "cutout_window_around_peak_s"
+                ],
+                find_peaks_kwargs=FindPeaksKwargs(
+                    **d["peaks"]["find_peaks_kwargs"]
+                ),
+            ),
+            resample=ResampleParameters(**d["resample"]),
+        )
+
+    def to_json(self, **json_kwargs) -> str:
+        """Serialise to JSON string."""
+        return json.dumps(self.to_dict(), **json_kwargs)
+
+    @classmethod
+    def from_json(cls, s: str) -> "Params":
+        """De-serialise from JSON string."""
+        return cls.from_dict(json.loads(s))
+
+
+# utility to map filter-name → parameter-class
+filter_map = {
+    "savgol": savgol_filter,
+    "bandpass": bandpass_filter,
+    "notch": notch_filter,
+}
+
+
+def _build_filter_param(name: str, payload: dict) -> object:
+    """Construct the correct filter-param dataclass given its *name*."""
+    cls = filter_map.get(name)
+    if cls is None:
+        msg = f"Unknown filter type '{name}'."
+        raise ValueError(msg)
+    return cls(**payload)
+
+
+def _fmt_scalar(x: Any) -> str:
+    if isinstance(x, (Path, str)):
+        return f'"{x}"'
+    if isinstance(x, float):
+        return f"{x:.6g}"
+    if isinstance(x, np.ndarray):
+        if x.size > 10:  # large array → just shape
+            return f"<ndarray shape={x.shape} dtype={x.dtype}>"
+        return np.array2string(x, separator=",", precision=3)
+    return str(x)
+
+
+def _pretty(obj: Any, level: int) -> str:
+    pad = " " * (_INDENT * level)
+
+    # ── dataclass ──────────────────────────────────────────────────────────
+    if is_dataclass(obj):
+        cls_name = obj.__class__.__name__
+        lines = [f"{pad}{cls_name}:"]
+        for f in fields(obj):
+            val = getattr(obj, f.name)
+            child = _pretty(val, level + 1)
+            if isinstance(val, (list, dict)) or is_dataclass(val):
+                lines.append(f"{pad}{' ' * _INDENT}{f.name}:")
+                lines.append(child)
+            else:
+                lines.append(
+                    f"{pad}{' ' * _INDENT}{f.name}: {_fmt_scalar(val)}"
+                )
+        return "\n".join(lines)
+
+    # ── list / tuple ───────────────────────────────────────────────────────
+    if isinstance(obj, (list, tuple)):
+        if not obj:
+            return f"{pad}[]"
+        lines = []
+        for item in obj:
+            child = _pretty(item, level + 1)
+            bullet = "-" if not isinstance(item, (list, dict)) else ""
+            if bullet:
+                lines.append(f"{pad}{bullet} {_fmt_scalar(item)}")
+            else:
+                lines.append(f"{pad}-")
+                lines.append(child)
+        return "\n".join(lines)
+
+    # ── dict ───────────────────────────────────────────────────────────────
+    if isinstance(obj, dict):
+        if not obj:
+            return f"{pad}{{}}"
+        lines = []
+        for k, v in obj.items():
+            child = _pretty(v, level + 1)
+            if isinstance(v, (list, dict)) or is_dataclass(v):
+                lines.append(f"{pad}{k}:")
+                lines.append(child)
+            else:
+                lines.append(f"{pad}{k}: {_fmt_scalar(v)}")
+        return "\n".join(lines)
+
+    # ── fall-back scalar ───────────────────────────────────────────────────
+    return f"{pad}{_fmt_scalar(obj)}"
+
+
+def pretty_print_config(cfg: Any, *, file=sys.stdout) -> None:
+    """
+    Nicely display a nested dataclass configuration in the shell.
+
+    Parameters
+    ----------
+    cfg
+        Instance of your root configuration dataclass (e.g. ``Params()``).
+    file
+        Stream to write to (defaults to ``sys.stdout``).
+    """
+    print(_pretty(cfg, 0), file=file)

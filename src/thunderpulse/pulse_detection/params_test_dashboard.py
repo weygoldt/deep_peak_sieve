@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import json
 from dataclasses import fields, replace
-from typing import Any, Dict, List, Tuple
-from thunderpulse.pulse_detection.collect_peaks import Params
+from typing import Any
 
 import dash
 import dash_bootstrap_components as dbc
-from dash import Input, Output, State, html
+from dash import Input, Output, html
+
+from thunderpulse.pulse_detection.collect_peaks import Params
 
 
 # --------------------------------------------------------------------------- #
@@ -33,7 +34,7 @@ def _make_input(label: str, value: Any, path: str) -> html.Div:
     )
 
 
-def _walk_dc(dc_obj, base="") -> Tuple[List[html.Div], Dict[str, Any]]:
+def _walk_dc(dc_obj, base="") -> tuple[list[html.Div], dict[str, Any]]:
     """Return (components, flat_value_dict)."""
     comps, flat = [], {}
     for f in fields(dc_obj):
@@ -80,7 +81,7 @@ def launch_config_dashboard(params_cls, title="Config editor", port=8050):
         Output("cfg-json", "value"), inputs, prevent_initial_call=False
     )
     def _update_json(*vals):
-        flat = dict(zip(flat_init.keys(), vals))
+        flat = dict(zip(flat_init.keys(), vals, strict=False))
         new_cfg = _apply(cfg, flat)
         return json.dumps(new_cfg.to_dict(), indent=2)
 

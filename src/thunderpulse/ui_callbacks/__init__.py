@@ -1,8 +1,8 @@
 from . import (
     calc_umap,
-    graphs,
     channel_slider,
     config_tabs,
+    graphs,
     save_processing,
     time_slider,
     waveforms,

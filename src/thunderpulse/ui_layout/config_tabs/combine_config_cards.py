@@ -6,7 +6,6 @@ from .peak_table_card import create_peak_table_card
 from .preprocessing_card import create_preprocessing_card
 
 
-
 def create_config_tabs():
     io_card = create_io_card()
     preprocessing_card = create_preprocessing_card()

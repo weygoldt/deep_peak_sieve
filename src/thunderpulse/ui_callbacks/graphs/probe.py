@@ -2,9 +2,6 @@ import nixio
 import numpy as np
 import plotly.graph_objects as go
 from dash import Input, Output, Patch
-from IPython import embed
-
-from thunderpulse.data_handling.data import load_data
 
 
 def default_probe_figure():

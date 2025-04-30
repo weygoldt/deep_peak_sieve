@@ -1,13 +1,9 @@
 """Main loop to parse large datasets and collect peaks."""
 
 import gc
-import json
-import sys
-from collections.abc import Iterator
-from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated
 
 import humanize
 import numpy as np
@@ -15,12 +11,15 @@ import typer
 from audioio.audioloader import AudioLoader
 from IPython import embed
 from scipy.interpolate import interp1d
-from scipy.signal import find_peaks, savgol_filter
+from scipy.signal import find_peaks
 
 from thunderpulse.data_handling.data import load_raw_data, save_numpy
-from thunderpulse.data_handling.filters import (
-    bandpass_filter,
-    notch_filter,
+from thunderpulse.pulse_detection.config import (
+    FiltersParameters,
+    FindPeaksKwargs,
+    Params,
+    filter_map,
+    pretty_print_config,
 )
 from thunderpulse.utils.loggers import (
     configure_logging,
@@ -28,258 +27,8 @@ from thunderpulse.utils.loggers import (
     get_progress,
 )
 
-_INDENT = 2  # spaces
-
 app = typer.Typer(pretty_exceptions_show_locals=False)
 log = get_logger(__name__)
-
-
-# leaf-level parameter blocks
-@dataclass(slots=True)
-class FindPeaksKwargs:
-    """Arguments forwarded to :func:`scipy.signal.find_peaks`."""
-
-    height: float | np.ndarray | None = None
-    threshold: float | np.ndarray | None = None
-    distance: float | None = None
-    prominence: float | np.ndarray | None = None
-    width: float | np.ndarray | None = None
-
-    def to_kwargs(self, *, keep_none: bool = False) -> dict[str, Any]:
-        """Convert to plain ``dict`` suitable for ``scipy.signal.find_peaks``.
-
-        By default keys whose value is ``None`` are dropped.
-
-        Examples
-        --------
-        >>> fp = FindPeaksKwargs(height=0.5, prominence=None)
-        >>> fp.to_kwargs()
-        {'height': 0.5}
-        >>> signal.find_peaks(x, **fp.to_kwargs())
-        """
-        d = asdict(self)
-        if not keep_none:
-            d = {k: v for k, v in d.items() if v is not None}
-        return d
-
-    def __iter__(self) -> Iterator[tuple[str, Any]]:
-        """Allow ``dict(fp_kwargs)`` or ``**dict(fp_kwargs)``."""
-        yield from self.to_kwargs().items()
-
-
-@dataclass
-class SavgolParameters:
-    """Savitzky–Golay filter parameters."""
-
-    window_length: int = 5
-    polyorder: int = 3
-
-
-@dataclass
-class BandpassParameters:
-    """Band-pass filter parameters."""
-
-    lowcut: float = 0.1
-    highcut: float = 3_000.0
-    order: int = 5
-
-
-@dataclass
-class NotchParameters:
-    """Notch filter (single frequency) parameters."""
-
-    notch_freq: float = 50.0
-    quality_factor: float = 30.0
-
-
-# higher-level blocks
-@dataclass
-class PeakDetectionParameters:
-    """Wrapper around *find_peaks* plus global peak-group criteria."""
-
-    min_channels: int = 1
-    mode: str = "both"  # 'peak', 'trough', 'both'
-    min_peak_distance_s: float = 0.001  # seconds
-    cutout_window_around_peak_s: float = 0.0005  # seconds
-
-    find_peaks_kwargs: FindPeaksKwargs = field(
-        default_factory=lambda: FindPeaksKwargs(height=0.001)
-    )
-
-
-@dataclass
-class FiltersParameters:
-    """
-    Arbitrary sequence of filters.
-
-    *filters* is a list of **names**; *filter_params* holds a *parallel* list of
-    parameter objects (must be the same length / order).
-    """
-
-    filters: list[str] = field(default_factory=lambda: ["savgol"])
-    filter_params: list[object] = field(default_factory=lambda: [SavgolParameters()])
-
-
-@dataclass
-class ResampleParameters:
-    """Zero-hold / FFT resampling settings."""
-
-    enabled: bool = True
-    n_resamples: int = 512
-
-
-# root config
-@dataclass
-class Params:
-    """
-    Full preprocessing configuration.
-
-    Attributes
-    ----------
-    filters
-        Definition & parameters of the DSP filter pipeline.
-    peaks
-        Peak detection settings.
-    resample
-        Resampling settings.
-    """
-
-    filters: FiltersParameters = field(default_factory=FiltersParameters)
-    peaks: PeakDetectionParameters = field(default_factory=PeakDetectionParameters)
-    resample: ResampleParameters = field(default_factory=ResampleParameters)
-
-    # ── (de)serialisation helpers ──────────────────────────────────────
-    def to_dict(self) -> dict:
-        """Deep-convert to plain Python containers (JSON-safe)."""
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, d: dict) -> "Params":
-        """Re-build :class:`Params` from *asdict*-style dict."""
-        # manual reconstruction because nested dataclasses are involved
-        return cls(
-            filters=FiltersParameters(
-                filters=d["filters"]["filters"],
-                filter_params=[
-                    _build_filter_param(pname, pobj)
-                    for pname, pobj in zip(
-                        d["filters"]["filters"],
-                        d["filters"]["filter_params"],
-                        strict=False,
-                    )
-                ],
-            ),
-            peaks=PeakDetectionParameters(
-                min_channels=d["peaks"]["min_channels"],
-                mode=d["peaks"]["mode"],
-                min_peak_distance_s=d["peaks"]["min_peak_distance_s"],
-                cutout_window_around_peak_s=d["peaks"]["cutout_window_around_peak_s"],
-                find_peaks_kwargs=FindPeaksKwargs(**d["peaks"]["find_peaks_kwargs"]),
-            ),
-            resample=ResampleParameters(**d["resample"]),
-        )
-
-    def to_json(self, **json_kwargs) -> str:
-        """Serialise to JSON string."""
-        return json.dumps(self.to_dict(), **json_kwargs)
-
-    @classmethod
-    def from_json(cls, s: str) -> "Params":
-        """De-serialise from JSON string."""
-        return cls.from_dict(json.loads(s))
-
-
-# utility to map filter-name → parameter-class
-_FILTER_MAP = {
-    "savgol": savgol_filter,
-    "bandpass": bandpass_filter,
-    "notch": notch_filter,
-}
-
-
-def _build_filter_param(name: str, payload: dict) -> object:
-    """Construct the correct filter-param dataclass given its *name*."""
-    cls = _FILTER_MAP.get(name)
-    if cls is None:
-        msg = f"Unknown filter type '{name}'."
-        raise ValueError(msg)
-    return cls(**payload)
-
-
-def _fmt_scalar(x: Any) -> str:
-    if isinstance(x, (Path, str)):
-        return f'"{x}"'
-    if isinstance(x, float):
-        return f"{x:.6g}"
-    if isinstance(x, np.ndarray):
-        if x.size > 10:  # large array → just shape
-            return f"<ndarray shape={x.shape} dtype={x.dtype}>"
-        return np.array2string(x, separator=",", precision=3)
-    return str(x)
-
-
-def _pretty(obj: Any, level: int) -> str:
-    pad = " " * (_INDENT * level)
-
-    # ── dataclass ──────────────────────────────────────────────────────────
-    if is_dataclass(obj):
-        cls_name = obj.__class__.__name__
-        lines = [f"{pad}{cls_name}:"]
-        for f in fields(obj):
-            val = getattr(obj, f.name)
-            child = _pretty(val, level + 1)
-            if isinstance(val, (list, dict)) or is_dataclass(val):
-                lines.append(f"{pad}{' ' * _INDENT}{f.name}:")
-                lines.append(child)
-            else:
-                lines.append(f"{pad}{' ' * _INDENT}{f.name}: {_fmt_scalar(val)}")
-        return "\n".join(lines)
-
-    # ── list / tuple ───────────────────────────────────────────────────────
-    if isinstance(obj, (list, tuple)):
-        if not obj:
-            return f"{pad}[]"
-        lines = []
-        for item in obj:
-            child = _pretty(item, level + 1)
-            bullet = "-" if not isinstance(item, (list, dict)) else ""
-            if bullet:
-                lines.append(f"{pad}{bullet} {_fmt_scalar(item)}")
-            else:
-                lines.append(f"{pad}-")
-                lines.append(child)
-        return "\n".join(lines)
-
-    # ── dict ───────────────────────────────────────────────────────────────
-    if isinstance(obj, dict):
-        if not obj:
-            return f"{pad}{{}}"
-        lines = []
-        for k, v in obj.items():
-            child = _pretty(v, level + 1)
-            if isinstance(v, (list, dict)) or is_dataclass(v):
-                lines.append(f"{pad}{k}:")
-                lines.append(child)
-            else:
-                lines.append(f"{pad}{k}: {_fmt_scalar(v)}")
-        return "\n".join(lines)
-
-    # ── fall-back scalar ───────────────────────────────────────────────────
-    return f"{pad}{_fmt_scalar(obj)}"
-
-
-def pretty_print_config(cfg: Any, *, file=sys.stdout) -> None:
-    """
-    Nicely display a nested dataclass configuration in the shell.
-
-    Parameters
-    ----------
-    cfg
-        Instance of your root configuration dataclass (e.g. ``Params()``).
-    file
-        Stream to write to (defaults to ``sys.stdout``).
-    """
-    print(_pretty(cfg, 0), file=file)
 
 
 def pretty_duration_humanize(seconds: float) -> str:
@@ -300,7 +49,9 @@ def initialize_dataset() -> dict:
     }
 
 
-def apply_filters(data: np.ndarray, rate: float, params: FiltersParameters) -> np.ndarray:
+def apply_filters(
+    data: np.ndarray, rate: float, params: FiltersParameters
+) -> np.ndarray:
     """Apply the specified filters to the data."""
     if not isinstance(params.filters, list):
         msg = "Filters must be a list of strings"
@@ -316,7 +67,7 @@ def apply_filters(data: np.ndarray, rate: float, params: FiltersParameters) -> n
         return data
     if len(params.filters) == 1:
         log.debug(f"Applying filter: {params.filters[0]}")
-        return _FILTER_MAP[params.filters[0]](
+        return filter_map[params.filters[0]](
             data,
             **params.filter_params[0],
             fs=rate,
@@ -328,7 +79,7 @@ def apply_filters(data: np.ndarray, rate: float, params: FiltersParameters) -> n
         strict=True,
     ):
         log.debug(f"Applying filter: {filter_name}")
-        data = _FILTER_MAP[filter_name](
+        data = filter_map[filter_name](
             data,
             **filter_params,
             fs=rate,
@@ -422,7 +173,9 @@ def group_peaks_across_channels_by_time(
     for p, c in zip(peaks[1:], channels[1:], strict=False):
         # Check if the current peak is within the peak_window of the last peak
         # in the current group, and if channel is new
-        if ((p - current_group[-1]) < peak_window) and (c not in current_channels):
+        if ((p - current_group[-1]) < peak_window) and (
+            c not in current_channels
+        ):
             current_group.append(p)
             current_channels.append(c)
         else:
@@ -518,7 +271,9 @@ def compute_mean_peak(
     peak_snippet -= baselines
 
     # Extract sign of strongest deviation
-    signs = np.array([1 if s[np.argmax(np.abs(s))] > 0 else -1 for s in peak_snippet.T])
+    signs = np.array(
+        [1 if s[np.argmax(np.abs(s))] > 0 else -1 for s in peak_snippet.T]
+    )
 
     # Flip sign according to majority polarity
     # TODO: This does not work sometimes, maybe due to noise? For single peak pulses
@@ -549,7 +304,9 @@ def compute_mean_peak(
     return mean_peak
 
 
-def process_block(input_data: np.ndarray, rate: float, params: Params, blockinfo: dict):
+def process_block(
+    input_data: np.ndarray, rate: float, params: Params, blockinfo: dict
+):
     output_data = {
         "peaks": [],
         "channels": [],
@@ -576,7 +333,9 @@ def process_block(input_data: np.ndarray, rate: float, params: Params, blockinfo
 
     # Convert config paramters from seconds to samples
     min_peak_distance = int(np.ceil(params.peaks.min_peak_distance_s * rate))
-    cutout_window_around_peak = int(np.ceil(params.peaks.cutout_window_around_peak_s * rate))
+    cutout_window_around_peak = int(
+        np.ceil(params.peaks.cutout_window_around_peak_s * rate)
+    )
 
     # TODO: Electrode distance sorting from Alex
 
@@ -597,7 +356,9 @@ def process_block(input_data: np.ndarray, rate: float, params: Params, blockinfo
     log.info(f"Found a total of {len(grouped_peaks)} peaks")
 
     if len(grouped_peaks) == 0:
-        log.debug(f"Found 0 peaks. Skipping block {blockinfo['blockiterval']} for now.")
+        log.debug(
+            f"Found 0 peaks. Skipping block {blockinfo['blockiterval']} for now."
+        )
         return None
 
     centers = [int(np.mean(g)) for g in grouped_peaks]
@@ -644,9 +405,14 @@ def process_block(input_data: np.ndarray, rate: float, params: Params, blockinfo
 
         # Amplitudes on each channel
         amp_index = np.array(
-            [np.argmax(np.abs(block_filtered[pks, ch])) for ch in range(n_channels)]
+            [
+                np.argmax(np.abs(block_filtered[pks, ch]))
+                for ch in range(n_channels)
+            ]
         )
-        amps = np.array([block_filtered[pks, ch][idx] for ch, idx in enumerate(amp_index)])
+        amps = np.array(
+            [block_filtered[pks, ch][idx] for ch, idx in enumerate(amp_index)]
+        )
 
         center = center + blockinfo["blockiterval"] * (
             blockinfo["blocksize"] - blockinfo["overlap"]
@@ -695,7 +461,9 @@ def process_file(
     polyorder = 3
     filtering_params = dict(
         mode="savgol",
-        window_length=window_length if window_length > polyorder else polyorder + 1,
+        window_length=window_length
+        if window_length > polyorder
+        else polyorder + 1,
         polyorder=3,
     )
 
@@ -735,8 +503,12 @@ def process_file(
                 "blocksize": blocksize,
                 "overlap": overlap,
             }
-            block_peaks, peak_counter = process_block(block, rate, params, blockinfo)
-            log.info(f"Processed block {blockiterval} with {peak_counter} peaks detected.")
+            block_peaks, peak_counter = process_block(
+                block, rate, params, blockinfo
+            )
+            log.info(
+                f"Processed block {blockiterval} with {peak_counter} peaks detected."
+            )
             pbar.update(task, advance=1)
 
         # TODO: Fix to work with current function output
@@ -765,11 +537,15 @@ def main(
     ] = 60,
     min_channels_with_peaks: Annotated[
         int,
-        typer.Option("--min_channels", "-mc", help="Minimum channels with peaks."),
+        typer.Option(
+            "--min_channels", "-mc", help="Minimum channels with peaks."
+        ),
     ] = 4,
     smoothing_window_s: Annotated[
         float,
-        typer.Option("--smoothing_window", "-sw", help="Smoothing window in seconds."),
+        typer.Option(
+            "--smoothing_window", "-sw", help="Smoothing window in seconds."
+        ),
     ] = 0.0001,
     peak_distance_s: Annotated[
         float,
@@ -787,7 +563,9 @@ def main(
             help="Minimum height of peaks in amplitude.",
         ),
     ] = 0.001,
-    resample: Annotated[bool, typer.Option("--resample", "-r", help="Resample the data.")] = True,
+    resample: Annotated[
+        bool, typer.Option("--resample", "-r", help="Resample the data.")
+    ] = True,
     n_resamples: Annotated[
         int, typer.Option("--n_resamples", "-nr", help="Number of resamples.")
     ] = 512,

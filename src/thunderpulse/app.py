@@ -1,11 +1,11 @@
 from typing import Annotated
+
 import dash_bootstrap_components as dbc
+import typer
 from dash import Dash, dcc, html
 
-from thunderpulse import ui_layout, ui_callbacks
-import typer
-
-from thunderpulse.utils.loggers import get_logger, configure_logging
+from thunderpulse import ui_callbacks, ui_layout
+from thunderpulse.utils.loggers import configure_logging, get_logger
 
 typer_app = typer.Typer()
 log = get_logger(__name__)
@@ -21,7 +21,6 @@ def main(
     ] = 0,
 ) -> None:
     """Generate the Dash app."""
-
     configure_logging(verbose)
     log.info("Starting Thunderpulse Dashboard")
 

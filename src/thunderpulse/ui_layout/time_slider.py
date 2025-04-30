@@ -1,6 +1,4 @@
-from dash import Input, Output, dcc, html
-
-from thunderpulse import utils
+from dash import dcc, html
 
 
 def create_time_slider():
@@ -23,4 +21,3 @@ def create_time_slider():
             ),
         ]
     )
-

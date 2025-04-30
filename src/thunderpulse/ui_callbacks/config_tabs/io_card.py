@@ -1,6 +1,6 @@
 import pathlib
 
-from dash import Dash, Input, Output, ctx, html
+from dash import Dash, Input, Output, ctx
 
 
 def callbacks(app: Dash) -> None:
