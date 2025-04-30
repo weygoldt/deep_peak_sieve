@@ -313,9 +313,11 @@ def process_block(
     n_channels = input_data.shape[1]
 
     # Apply filtering
+    log.info("Applying filters")
     block_filtered = apply_filters(input_data, rate, params=params.filters)
 
     # Detect peaks on each channel
+    log.info("Detecting peaks")
     peaks_list, channels_list = detect_peaks(
         block_filtered,
         mode=params.peaks.mode,
@@ -331,6 +333,7 @@ def process_block(
     # TODO: Electrode distance sorting from Alex
 
     # Group peaks across channels when they are close in time
+    log.info("Grouping peaks")
     grouped_peaks, grouped_channels = group_peaks_across_channels_by_time(
         peaks_list,
         channels_list,
@@ -338,6 +341,7 @@ def process_block(
     )
 
     # Filter out groups that do not meet the threshold
+    log.info("Filtering peak groups")
     if params.peaks.min_channels > 1:
         grouped_peaks, grouped_channels = filter_peak_groups(
             grouped_peaks, grouped_channels, params.peaks.min_channels
@@ -473,7 +477,7 @@ def main(
         bool,
         typer.Option("--overwrite", "-o", help="Overwrite existing files."),
     ] = False,
-    verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
+    verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 3,
 ):
     """
     Main function to orchestrate:
