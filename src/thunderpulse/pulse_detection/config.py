@@ -18,28 +18,24 @@ from thunderpulse.data_handling.filters import (
 _INDENT = 2
 
 
-# leaf-level parameter blocks
 @dataclass(slots=True)
-class FindPeaksKwargs:
-    """Arguments forwarded to :func:`scipy.signal.find_peaks`."""
+class KwargsDataclass:
+    """Base class for kwargs dataclasses.
 
-    height: float | np.ndarray | None = None
-    threshold: float | np.ndarray | None = None
-    distance: float | None = None
-    prominence: float | np.ndarray | None = None
-    width: float | np.ndarray | None = None
+    This is used to enforce that all subclasses are "slots" dataclasses.
+    """
+
+    def __post_init__(self) -> None:
+        """Check that all fields are defined as slots."""
+        if not is_dataclass(self):
+            raise TypeError("KwargsDataclass must be a dataclass.")
+        if not hasattr(self, "__slots__"):
+            raise TypeError("KwargsDataclass must have __slots__ defined.")
 
     def to_kwargs(self, *, keep_none: bool = False) -> dict[str, Any]:
         """Convert to plain ``dict`` suitable for ``scipy.signal.find_peaks``.
 
         By default keys whose value is ``None`` are dropped.
-
-        Examples
-        --------
-        >>> fp = FindPeaksKwargs(height=0.5, prominence=None)
-        >>> fp.to_kwargs()
-        {'height': 0.5}
-        >>> signal.find_peaks(x, **fp.to_kwargs())
         """
         d = asdict(self)
         if not keep_none:
@@ -51,8 +47,41 @@ class FindPeaksKwargs:
         yield from self.to_kwargs().items()
 
 
-@dataclass
-class SavgolParameters:
+# leaf-level parameter blocks
+@dataclass(slots=True)
+class FindPeaksKwargs(KwargsDataclass):
+    """Arguments forwarded to :func:`scipy.signal.find_peaks`."""
+
+    height: float | np.ndarray | None = None
+    threshold: float | np.ndarray | None = None
+    distance: float | None = None
+    prominence: float | np.ndarray | None = None
+    width: float | np.ndarray | None = None
+
+    # def to_kwargs(self, *, keep_none: bool = False) -> dict[str, Any]:
+    #     """Convert to plain ``dict`` suitable for ``scipy.signal.find_peaks``.
+    #
+    #     By default keys whose value is ``None`` are dropped.
+    #
+    #     Examples
+    #     --------
+    #     >>> fp = FindPeaksKwargs(height=0.5, prominence=None)
+    #     >>> fp.to_kwargs()
+    #     {'height': 0.5}
+    #     >>> signal.find_peaks(x, **fp.to_kwargs())
+    #     """
+    #     d = asdict(self)
+    #     if not keep_none:
+    #         d = {k: v for k, v in d.items() if v is not None}
+    #     return d
+    #
+    # def __iter__(self) -> Iterator[tuple[str, Any]]:
+    #     """Allow ``dict(fp_kwargs)`` or ``**dict(fp_kwargs)``."""
+    #     yield from self.to_kwargs().items()
+
+
+@dataclass(slots=True)
+class SavgolParameters(KwargsDataclass):
     """Savitzky–Golay filter parameters."""
 
     window_length: int = 5
@@ -60,7 +89,7 @@ class SavgolParameters:
 
 
 @dataclass
-class BandpassParameters:
+class BandpassParameters(KwargsDataclass):
     """Band-pass filter parameters."""
 
     lowcut: float = 0.1
@@ -69,7 +98,7 @@ class BandpassParameters:
 
 
 @dataclass
-class NotchParameters:
+class NotchParameters(KwargsDataclass):
     """Notch filter (single frequency) parameters."""
 
     notch_freq: float = 50.0
@@ -135,6 +164,7 @@ class Params:
         default_factory=PeakDetectionParameters
     )
     resample: ResampleParameters = field(default_factory=ResampleParameters)
+    buffersize_s: float = 60.0  # seconds
 
     # ── (de)serialisation helpers ──────────────────────────────────────
     def to_dict(self) -> dict:
@@ -153,7 +183,7 @@ class Params:
                     for pname, pobj in zip(
                         d["filters"]["filters"],
                         d["filters"]["filter_params"],
-                        strict=False,
+                        strict=True,
                     )
                 ],
             ),
@@ -169,6 +199,7 @@ class Params:
                 ),
             ),
             resample=ResampleParameters(**d["resample"]),
+            buffersize_s=d["buffersize_s"],
         )
 
     def to_json(self, **json_kwargs) -> str:
@@ -178,7 +209,9 @@ class Params:
     @classmethod
     def from_json(cls, s: str) -> "Params":
         """De-serialise from JSON string."""
-        return cls.from_dict(json.loads(s))
+        with open(s, "r") as f:
+            json_file = json.loads(f.read())
+        return cls.from_dict(json_file)
 
 
 # utility to map filter-name → parameter-class
@@ -188,10 +221,16 @@ filter_map = {
     "notch": notch_filter,
 }
 
+filter_config_map = {
+    "savgol": SavgolParameters,
+    "bandpass": BandpassParameters,
+    "notch": NotchParameters,
+}
+
 
 def _build_filter_param(name: str, payload: dict) -> object:
     """Construct the correct filter-param dataclass given its *name*."""
-    cls = filter_map.get(name)
+    cls = filter_config_map.get(name)
     if cls is None:
         msg = f"Unknown filter type '{name}'."
         raise ValueError(msg)
@@ -213,7 +252,6 @@ def _fmt_scalar(x: Any) -> str:
 def _pretty(obj: Any, level: int) -> str:
     pad = " " * (_INDENT * level)
 
-    # ── dataclass ──────────────────────────────────────────────────────────
     if is_dataclass(obj):
         cls_name = obj.__class__.__name__
         lines = [f"{pad}{cls_name}:"]
@@ -229,7 +267,6 @@ def _pretty(obj: Any, level: int) -> str:
                 )
         return "\n".join(lines)
 
-    # ── list / tuple ───────────────────────────────────────────────────────
     if isinstance(obj, (list, tuple)):
         if not obj:
             return f"{pad}[]"
@@ -244,7 +281,6 @@ def _pretty(obj: Any, level: int) -> str:
                 lines.append(child)
         return "\n".join(lines)
 
-    # ── dict ───────────────────────────────────────────────────────────────
     if isinstance(obj, dict):
         if not obj:
             return f"{pad}{{}}"
@@ -258,7 +294,6 @@ def _pretty(obj: Any, level: int) -> str:
                 lines.append(f"{pad}{k}: {_fmt_scalar(v)}")
         return "\n".join(lines)
 
-    # ── fall-back scalar ───────────────────────────────────────────────────
     return f"{pad}{_fmt_scalar(obj)}"
 
 
@@ -274,3 +309,13 @@ def pretty_print_config(cfg: Any, *, file=sys.stdout) -> None:
         Stream to write to (defaults to ``sys.stdout``).
     """
     print(_pretty(cfg, 0), file=file)
+
+
+if __name__ == "__main__":
+    # Example usage
+    cfg = Params()
+    pretty_print_config(cfg)
+
+    with open("config.json", "w") as f:
+        jsonstr = cfg.to_json(indent=2, sort_keys=True)
+        f.write(jsonstr)

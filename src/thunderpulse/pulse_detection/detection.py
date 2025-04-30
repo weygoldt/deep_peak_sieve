@@ -4,6 +4,7 @@ import gc
 from datetime import timedelta
 from pathlib import Path
 from typing import Annotated
+import json
 
 import humanize
 import numpy as np
@@ -13,7 +14,7 @@ from IPython import embed
 from scipy.interpolate import interp1d
 from scipy.signal import find_peaks
 
-from thunderpulse.data_handling.data import load_raw_data, save_numpy
+from thunderpulse.data_handling.data import load_data, get_file_list, Data
 from thunderpulse.pulse_detection.config import (
     FiltersParameters,
     FindPeaksKwargs,
@@ -65,13 +66,7 @@ def apply_filters(
     if len(params.filters) == 0:
         log.debug("No filters applied")
         return data
-    if len(params.filters) == 1:
-        log.debug(f"Applying filter: {params.filters[0]}")
-        return filter_map[params.filters[0]](
-            data,
-            **params.filter_params[0],
-            fs=rate,
-        )
+
     # Apply all filters in sequence
     for filter_name, filter_params in zip(
         params.filters,
@@ -81,8 +76,7 @@ def apply_filters(
         log.debug(f"Applying filter: {filter_name}")
         data = filter_map[filter_name](
             data,
-            **filter_params,
-            fs=rate,
+            **filter_params.to_kwargs(keep_none=True),
         )
     return data
 
@@ -433,146 +427,56 @@ def process_block(
 
 
 def process_file(
-    data: AudioLoader,
-    save_path: Path,
-    path: Path,
-    buffersize_s: int = 60,
-    min_channels_with_peaks: int = 4,
-    smoothing_window_s: float = 0.0001,
-    peak_distance_s: float = 0.004,
-    peak_height_threshold: float = 0.001,
-    resample: bool = True,
-    n_resamples: int = 512,
-):
-    data.set_unwrap(thresh=1.5)
+    data: Data,
+    # save_path: Path,
+    params: Params,
+) -> None:
+    if data.metadata.samplerate is None:
+        msg = "Data rate is None, cannot process file."
+        raise ValueError(msg)
+    rate = data.metadata.samplerate
 
-    if data.rate is None:
-        raise ValueError("Data rate is None, cannot process file.")
-    rate = data.rate
-
-    blocksize = int(np.ceil(rate * buffersize_s))
+    blocksize = int(np.ceil(rate * params.buffersize_s))
     overlap = blocksize // 10
 
-    # Configuration
-    min_peak_distance = int(np.ceil(peak_distance_s * data.rate))
-    around_peak_window = int(np.round(0.75 * min_peak_distance))
-
-    window_length = int(np.ceil(smoothing_window_s * data.rate))
-    polyorder = 3
-    filtering_params = dict(
-        mode="savgol",
-        window_length=window_length
-        if window_length > polyorder
-        else polyorder + 1,
-        polyorder=3,
-    )
-
-    log.info(
-        f"""
-        Processing dataset: {data.filepath}.
-        Recording duration: {pretty_duration_humanize(data.shape[0] / data.rate)}.
-        With a sampling rate: {data.rate} Hz.
-        Recorded on {data.channels} channels.
-        Set buffersize_s: {buffersize_s} seconds, or {blocksize} samples.
-        Set block_overlap to {overlap} samples.
-        Set the time window of interest to {around_peak_window * 2 / data.rate} seconds.
-        Set minimum peak distance: {peak_distance_s} seconds, or {min_peak_distance} samples.
-        Set minimum peak height: {peak_height_threshold}.
-        Set minimum channels with peaks: {min_channels_with_peaks}.
-        Set smoothing window: {smoothing_window_s} seconds, or {filtering_params["window_length"]} samples.
-        Set resampling to {resample} with {n_resamples} samples.
-        """
-    )
-
-    dataset = initialize_dataset()
-    collected_peak_counter = 0
-    dataset_counter = 0
-    params = Params()
-
-    num_blocks = int(np.ceil(data.shape[0] / (blocksize - overlap)))
+    num_blocks = int(np.ceil(data.metadata.frames / (blocksize - overlap)))
     with get_progress() as pbar:
         desc = "Processing file"
         task = pbar.add_task(desc, total=num_blocks, transient=True)
         for blockiterval, block in enumerate(
-            data.blocks(
-                block_size=blocksize, noverlap=overlap
-            )  # TODO: Implement the .blocks() method for our dataset class
+            data.blocks(blocksize=blocksize, overlap=overlap)
         ):
             blockinfo = {
                 "blockiterval": blockiterval,
                 "blocksize": blocksize,
                 "overlap": overlap,
             }
+
+            # TODO: Why is my linter crying about this?
             block_peaks, peak_counter = process_block(
                 block, rate, params, blockinfo
             )
+
             log.info(
                 f"Processed block {blockiterval} with {peak_counter} peaks detected."
             )
+
             pbar.update(task, advance=1)
 
-        # TODO: Fix to work with current function output
-        dataset["peaks"] = np.array(dataset["peaks"])
-        dataset["channels"] = np.array(dataset["channels"])
-        dataset["amplitudes"] = np.array(dataset["amplitudes"])
-        dataset["centers"] = np.array(dataset["centers"])
-        dataset["start_stop_index"] = np.array(dataset["start_stop_index"])
-        dataset["rate"] = data.rate
-
-        # TODO: Nix instead of Numpy
-        save_numpy(dataset, save_path)
+        # TODO: Here Nix file saving instead of Numpy
         gc.collect()  # TODO: Check if this has actually an effect
 
 
 @app.command()
 def main(
     datapath: Annotated[Path, typer.Argument(help="Path to the dataset.")],
-    verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
-    filetype: Annotated[
-        str,
-        typer.Option("--filetype", "-f", help="File type to detect peaks on."),
-    ] = "wav",
-    buffersize_seconds: Annotated[
-        int, typer.Option("--buffersize", "-b", help="Buffer size in seconds.")
-    ] = 60,
-    min_channels_with_peaks: Annotated[
-        int,
-        typer.Option(
-            "--min_channels", "-mc", help="Minimum channels with peaks."
-        ),
-    ] = 4,
-    smoothing_window_s: Annotated[
-        float,
-        typer.Option(
-            "--smoothing_window", "-sw", help="Smoothing window in seconds."
-        ),
-    ] = 0.0001,
-    peak_distance_s: Annotated[
-        float,
-        typer.Option(
-            "--peak_distance",
-            "-pd",
-            help="Minimum distance between peaks in seconds.",
-        ),
-    ] = 0.004,
-    peak_height_threshold: Annotated[
-        float,
-        typer.Option(
-            "--peak_height",
-            "-ph",
-            help="Minimum height of peaks in amplitude.",
-        ),
-    ] = 0.001,
-    resample: Annotated[
-        bool, typer.Option("--resample", "-r", help="Resample the data.")
-    ] = True,
-    n_resamples: Annotated[
-        int, typer.Option("--n_resamples", "-nr", help="Number of resamples.")
-    ] = 512,
+    probepath: Annotated[Path, typer.Option(help="Path to the probe file.")],
+    configpath: Annotated[Path, typer.Option(help="Path to the config file.")],
     overwrite: Annotated[
         bool,
         typer.Option("--overwrite", "-o", help="Overwrite existing files."),
     ] = False,
+    verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
 ):
     """
     Main function to orchestrate:
@@ -583,35 +487,29 @@ def main(
     5) Waveform extraction
     6) Dataset saving
     """
-    params = Params()
-    pretty_print_config(params)
-    exit()
 
     configure_logging(verbosity=verbose)
-    file_list, save_list = load_raw_data(path=datapath, filetype=filetype)
 
-    for data, save_path in zip(file_list, save_list, strict=False):
+    params = Params().from_json(str(configpath))
+    subdirs = sorted(datapath.glob("*/"))
+
+    for recording_path in subdirs:
+        # TODO: Re-implement this for *nix files
         # Skip if file already exists and overwrite is not set
-        if save_path.with_suffix(".npz").exists() and not overwrite:
-            log.info(f"File {save_path} already exists, skipping.")
-            continue
+        # if save_path.with_suffix(".npz").exists() and not overwrite:
+        #     log.info(f"File {save_path} already exists, skipping.")
+        #     continue
 
         try:
-            data = AudioLoader(data)
+            data = load_data(recording_path, probepath)
         except Exception as e:
-            log.error(f"Failed to load {data}: {e}")
+            log.error(f"Failed to load {recording_path}: {e}")
             continue
+
         process_file(
             data,
-            save_path,
-            datapath,
-            buffersize_seconds,
-            min_channels_with_peaks,
-            smoothing_window_s,
-            peak_distance_s,
-            peak_height_threshold,
-            resample,
-            n_resamples,
+            # save_path,
+            params=params,
         )
 
 
