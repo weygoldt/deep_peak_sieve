@@ -2,7 +2,7 @@ import dash_bootstrap_components as dbc
 from dash import html
 
 
-def create_io_card() -> dbc.Card:
+def create_io_offcanvas() -> dbc.Card:
     """Create and return an IO Card.
 
     Returns
@@ -14,8 +14,8 @@ def create_io_card() -> dbc.Card:
         dbc.CardBody(
             [
                 html.P("Data Folder", className="card-text"),
-                dbc.Input(
-                    type="text",
+                dbc.Textarea(
+                    # type="text",
                     placeholder="Please put in your datapath",
                     id="datapath",
                     persistence=True,
@@ -24,8 +24,8 @@ def create_io_card() -> dbc.Card:
                 ),
                 html.Br(),
                 html.P("Save Path", className="card-text"),
-                dbc.Input(
-                    type="text",
+                dbc.Textarea(
+                    # type="text",
                     placeholder="Please put in your save path",
                     id="savepath",
                     persistence=True,
@@ -34,8 +34,8 @@ def create_io_card() -> dbc.Card:
                 ),
                 html.Br(),
                 html.P("Layout of Probe/Grid", className="card-text"),
-                dbc.Input(
-                    type="text",
+                dbc.Textarea(
+                    # type="text",
                     placeholder="Please put in your path to the probe/grid layout",
                     id="probepath",
                     persistence=True,
@@ -43,15 +43,12 @@ def create_io_card() -> dbc.Card:
                     className="card-text",
                 ),
                 html.Br(),
-                html.Div(
-                    dbc.Button(
-                        "Load the data",
-                        color="info",
-                        id="bt_load_data",
-                        n_clicks=0,
-                    ),
-                    className="d-grid",
-                ),
+                # dbc.Button(
+                #     "Load the data",
+                #     color="warning",
+                #     id="bt_load_data",
+                #     n_clicks=0,
+                # ),
             ]
         )
     )
