@@ -12,7 +12,7 @@
     ]
   },
   "peaks": {
-    "cutout_window_around_peak_s": 0.0005,
+    "cutout_window_around_peak_s": 0.005,
     "find_peaks_kwargs": {
       "distance": null,
       "height": 0.001,

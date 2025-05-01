@@ -302,13 +302,6 @@ def compute_mean_peak(
 def detect_peaks_on_block(
     input_data: np.ndarray, rate: float, params: Params, blockinfo: dict
 ):
-    output_data = {
-        "peaks": [],
-        "channels": [],
-        "centers": [],
-        "start_stop_index": [],
-    }
-
     n_channels = input_data.shape[0]
 
     # Apply filtering
@@ -355,13 +348,40 @@ def detect_peaks_on_block(
 
     # For each peak group, compute & store waveform
     peak_counter = 0
+    cutout_size = cutout_window_around_peak * 2
+    peak_array = np.full(
+        shape=(len(grouped_peaks), n_channels, cutout_size),
+        fill_value=np.nan,
+        dtype=np.float32,
+    )
+    channels_array = np.full(
+        shape=(len(grouped_peaks), n_channels),
+        fill_value=False,
+        dtype=bool,
+    )
+    centers_array = np.full(
+        shape=(len(grouped_peaks),),
+        fill_value=-1,
+        dtype=np.int32,
+    )
+    start_stop_index = np.full(
+        shape=(len(grouped_peaks), 2),
+        fill_value=-1,
+        dtype=np.int32,
+    )
+
+    output_data = {
+        "peaks": peak_array,
+        "channels": channels_array,
+        "centers": centers_array,
+        "start_stop_index": start_stop_index,
+    }
+
     for _, (pks, chans, center) in enumerate(
         zip(grouped_peaks, grouped_channels, centers, strict=False)
     ):
-        chans = np.array(chans)
-        pks = np.array(pks)
-
         # Mark which channels contributed
+        chans = np.array(chans)
         bool_channels = np.zeros(n_channels, dtype=bool)
         bool_channels[chans] = True
 
@@ -375,13 +395,21 @@ def detect_peaks_on_block(
         ]
 
         peak_counter += 1
-        output_data["peaks"].append(input_data[bool_channels][:, pks])
-        output_data["channels"].append(bool_channels)
-        output_data["centers"].append(center)
-        output_data["start_stop_index"].append(start_stop_index)
+
+        output_data["peaks"][peak_counter - 1, :] = input_data[
+            :, start_stop_index[0] : start_stop_index[1]
+        ]
+        output_data["channels"][peak_counter - 1, :] = bool_channels
+        output_data["centers"][peak_counter - 1] = center
+        output_data["start_stop_index"][peak_counter - 1] = start_stop_index
 
     return output_data, peak_counter
 
+
+def post_process_peaks_per_block():
+    # TODO: This is where the mean_peak logic and amplitude extractio, interplotaion, etc. should go because
+    # we dont want to wait ages for that in the gui
+    pass
     #     mean_peak = compute_mean_peak(
     #         block_filtered,
     #         center,
@@ -458,7 +486,6 @@ def process_file(
         for i in range(len(block_peaks["peaks"])):
             plt.plot(block_peaks["peaks"][i].T)
             plt.show()
-        exit()
 
         log.warning(
             f"Processed block {blockiterval} with {peak_counter} peaks detected."
