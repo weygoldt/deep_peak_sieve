@@ -24,10 +24,6 @@ def callbacks(app):
                 1,
             )
         ds = load_data(**filepath)
-        # nix_file = nixio.File(filepath["data_path"], nixio.FileMode.ReadOnly)
-        # data_shape = nix_file.blocks[0].data_arrays["data"].shape[0]
-        # section = nix_file.sections["recording"]
-        # sample_rate = float(section["samplerate"][0])
         return (
             "Time Slider [1 s]",
             ds.metadata.frames,
