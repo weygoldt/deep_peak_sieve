@@ -49,6 +49,7 @@ def callbacks(app: Dash) -> None:
         Input("savepath", "value"),
         Input("probepath", "value"),
         Input("bt_load_data", "n_clicks"),
+        prevent_initial_call=True,
     )
     def io_handling(
         datapath: str | None,
