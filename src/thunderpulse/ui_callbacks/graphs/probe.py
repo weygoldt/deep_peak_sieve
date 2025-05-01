@@ -3,6 +3,8 @@ import numpy as np
 import plotly.graph_objects as go
 from dash import Input, Output, Patch
 
+from thunderpulse.data_handling.data import load_data
+
 
 def default_sensory_array_figure():
     fig = go.Figure(
