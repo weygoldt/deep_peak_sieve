@@ -102,6 +102,7 @@ class BandpassParameters(KwargsDataclass):
     lowcut: float = 0.1
     highcut: float = 3_000.0
     order: int = 5
+    fs: float = 30_000.0
 
 
 @dataclass
@@ -109,6 +110,7 @@ class NotchParameters(KwargsDataclass):
     """Notch filter (single frequency) parameters."""
 
     notch_freq: float = 50.0
+    fs: float = 30_000.0
     quality_factor: float = 30.0
 
 
