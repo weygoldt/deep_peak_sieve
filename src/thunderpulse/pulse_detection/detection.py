@@ -5,13 +5,14 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Annotated
 
-import matplotlib.pyplot as plt
+import nixio
+from IPython import embed
 import humanize
+import matplotlib.pyplot as plt
 import numpy as np
 import typer
-from IPython import embed
-from scipy.interpolate import interp1d
 from scipy.signal import find_peaks
+from scipy.interpolate import interp1d
 
 from thunderpulse.data_handling.data import Data, load_data
 from thunderpulse.pulse_detection.config import (
@@ -75,7 +76,7 @@ def apply_filters(
         log.debug(f"Filter parameters: {filter_params}")
 
         # Check if filter requires samplerate
-        data_now = filter_map[filter_name](
+        data = filter_map[filter_name](
             data,
             rate,
             **filter_params.to_kwargs(keep_none=False),
@@ -235,40 +236,22 @@ def filter_peak_groups(
 
 
 def compute_mean_peak(
-    block_filtered: np.ndarray,
-    center: float,
+    peak: np.ndarray,
     channels: np.ndarray,
-    around_peak_window: int,
-) -> np.ndarray | None:
+) -> np.ndarray:
     """Given a filtered block, a center index, and the channels that had peaks,
     return a normalized mean-peak waveform across those channels.
     """
-    indexer = np.arange(
-        center - around_peak_window,
-        center + around_peak_window,
-        dtype=np.int32,
-    )
-    if (np.any(indexer < 0)) or (np.any(indexer >= block_filtered.shape[1])):
-        log.warning("Index out of bounds for peak window, skipping peak.")
-        return None
 
-    channels = np.array(channels, dtype=np.int32)
-
-    try:
-        peak_snippet = block_filtered[channels][:, indexer]
-    except Exception as e:
-        msg = f"Failed to extract peak snippet with indexer {indexer} and channels {channels}: {e}"
-        raise ValueError(msg)
+    peak = peak[channels, :]
 
     # Pull each channel baseline to zero
-    baseline_window = around_peak_window // 4
-    baselines = np.mean(peak_snippet[:baseline_window], axis=0)
-    peak_snippet -= baselines
+    baseline_window = peak.shape[-1] // 4
+    baselines = np.mean(peak[:, :baseline_window], axis=-1)
+    peak -= baselines.reshape(-1, 1)
 
     # Extract sign of strongest deviation
-    signs = np.array(
-        [1 if s[np.argmax(np.abs(s))] > 0 else -1 for s in peak_snippet.T]
-    )
+    signs = np.array([1 if s[np.argmax(np.abs(s))] > 0 else -1 for s in peak])
 
     # Flip sign according to majority polarity
     # TODO: This does not work sometimes, maybe due to noise? For single peak pulses
@@ -277,31 +260,26 @@ def compute_mean_peak(
 
     if np.all(signs > 0):
         log.debug("All peaks are positive")
-        mean_peak = np.mean(peak_snippet, axis=0)
+        mean_peak = np.mean(peak, axis=0)
     elif np.all(signs < 0):
         log.debug("All peaks are negative")
-        mean_peak = -np.mean(peak_snippet, axis=0)
+        mean_peak = -np.mean(peak, axis=0)
     else:
         log.debug("Peaks are mixed, flipping signs")
-        mean_peak = np.mean(peak_snippet * signs, axis=0)
+        mean_peak = np.mean(peak * signs.reshape(-1, 1), axis=0)
 
-    # Pull the combined baseline to zero
+    # Pull the combined baseline to zero again
     start_baseline = np.mean(mean_peak[:baseline_window])
     mean_peak -= start_baseline
-
-    # Normalize
-    denominator = np.max(mean_peak) - np.min(mean_peak)
-    if denominator == 0:
-        log.warning("All values are the same, cannot normalize")
-        return None
-    # mean_peak = mean_peak / denominator
 
     return mean_peak
 
 
 def detect_peaks_on_block(
-    input_data: np.ndarray, rate: float, params: Params, blockinfo: dict
-):
+    input_data: np.ndarray,
+    rate: float,
+    params: Params,
+) -> dict | None:
     n_channels = input_data.shape[0]
 
     # Apply filtering
@@ -339,9 +317,8 @@ def detect_peaks_on_block(
     log.info(f"Found a total of {len(grouped_peaks)} peaks")
 
     if len(grouped_peaks) == 0:
-        log.debug(
-            f"Found 0 peaks. Skipping block {blockinfo['blockiterval']} for now."
-        )
+        msg = "No peaks found in block, skipping."
+        log.debug(msg)
         return None
 
     centers = [int(np.mean(g)) for g in grouped_peaks]
@@ -355,19 +332,13 @@ def detect_peaks_on_block(
         dtype=np.float32,
     )
     channels_array = np.full(
-        shape=(len(grouped_peaks), n_channels),
-        fill_value=False,
-        dtype=bool,
+        shape=(len(grouped_peaks), n_channels), fill_value=False, dtype=bool
     )
     centers_array = np.full(
-        shape=(len(grouped_peaks),),
-        fill_value=-1,
-        dtype=np.int32,
+        shape=(len(grouped_peaks),), fill_value=-1, dtype=np.int32
     )
     start_stop_index = np.full(
-        shape=(len(grouped_peaks), 2),
-        fill_value=-1,
-        dtype=np.int32,
+        shape=(len(grouped_peaks), 2), fill_value=-1, dtype=np.int32
     )
 
     output_data = {
@@ -403,55 +374,57 @@ def detect_peaks_on_block(
         output_data["centers"][peak_counter - 1] = center
         output_data["start_stop_index"][peak_counter - 1] = start_stop_index
 
-    return output_data, peak_counter
+    return output_data
 
 
-def post_process_peaks_per_block():
-    # TODO: This is where the mean_peak logic and amplitude extractio, interplotaion, etc. should go because
-    # we dont want to wait ages for that in the gui
-    pass
-    #     mean_peak = compute_mean_peak(
-    #         block_filtered,
-    #         center,
-    #         chans,
-    #         cutout_window_around_peak,
-    #     )
-    #
-    #     if (mean_peak is None) or (len(chans) == 0):
-    #         msg = "Failed to compute mean peak due to index out of range or degenerate peak shape."
-    #         log.warning(msg)
-    #         continue
-    #
-    #     # Resample mean peak
-    #     if params.resample.enabled:
-    #         log.debug("Resampling mean peak")
-    #         x = np.linspace(0, len(mean_peak), len(mean_peak))
-    #         f = interp1d(x, mean_peak, kind="cubic")
-    #         xnew = np.linspace(0, len(mean_peak), params.resample.n_resamples)
-    #         mean_peak = f(xnew)
-    #
-    #     # Amplitudes on each channel
-    #     amp_index = np.array(
-    #         [
-    #             np.argmax(np.abs(block_filtered[ch, pks]))
-    #             for ch in range(n_channels)
-    #         ]
-    #     )
-    #     amps = np.array(
-    #         [block_filtered[ch, pks][idx] for ch, idx in enumerate(amp_index)]
-    #     )
-    #
-    # for p in output_data["peaks"]:
-    #     plt.plot(p)
-    # plt.show()
-    #
-    # return output_data, peak_counter
+def post_process_peaks_per_block(
+    peaks: dict, params: Params, blockinfo: dict
+) -> dict:
+    n_peaks = peaks["peaks"].shape[0]
+    n_channels = peaks["peaks"].shape[1]
+    n_samples = peaks["peaks"].shape[2]
+
+    # Interpolate raw peak snippets
+    if params.resample.enabled:
+        log.debug("Resampling peak snippets")
+        new_shape = (n_peaks, n_channels, params.resample.n_resamples)
+        new_peaks = np.full(
+            shape=new_shape,
+            fill_value=np.nan,
+            dtype=peaks["peaks"].dtype,
+        )
+
+        for i in range(n_peaks):
+            for ch in range(n_channels):
+                x = np.linspace(0, n_samples, n_samples)
+                xnew = np.linspace(0, n_samples, params.resample.n_resamples)
+                f = interp1d(x, peaks["peaks"][i, ch], kind="cubic")
+                new_peaks[i, ch] = f(xnew)
+
+        peaks["peaks"] = new_peaks
+        n_samples = params.resample.n_resamples
+
+    # Compute mean peaks
+    peaks["mean_peaks"] = np.full(
+        shape=(n_peaks, n_samples),
+        fill_value=np.nan,
+        dtype=peaks["peaks"].dtype,
+    )
+    log.debug("Computing mean peaks")
+    for i in range(len(peaks["peaks"])):
+        mean_peak = compute_mean_peak(
+            peaks["peaks"][i],
+            peaks["channels"][i],
+        )
+        peaks["mean_peaks"][i] = mean_peak
+
+    return peaks
 
 
-def process_file(
+def process_dataset(
     data: Data,
-    # save_path: Path,
     params: Params,
+    output_path: Path,
 ) -> None:
     if data.metadata.samplerate is None:
         msg = "Data rate is None, cannot process file."
@@ -459,6 +432,10 @@ def process_file(
     rate = data.metadata.samplerate
     blocksize = int(np.ceil(rate * params.buffersize_s))
     overlap = blocksize // 10
+
+    # Open NIX file
+    nix_file = nixio.File.open(str(output_path), nixio.FileMode.Overwrite)
+    block = nix_file.create_block(name="pulses", type_="ThunderPulse.pulses")
 
     num_blocks = int(np.ceil(data.metadata.frames / (blocksize - overlap)))
     # with get_progress() as pbar:
@@ -479,17 +456,23 @@ def process_file(
         if block.shape[0] != data.metadata.channels:
             block = np.transpose(block)
 
-        block_peaks, peak_counter = detect_peaks_on_block(
-            block, rate, params, blockinfo
+        block_peaks = detect_peaks_on_block(block, rate, params)
+
+        if block_peaks is None:
+            log.info("Skipping block due to no peaks found")
+            continue
+
+        block_peaks = post_process_peaks_per_block(
+            block_peaks, params, blockinfo
         )
 
-        for i in range(len(block_peaks["peaks"])):
-            plt.plot(block_peaks["peaks"][i].T)
-            plt.show()
+        if blockiterval == 0:
+            pass
+            # Initialize dataset
 
-        log.warning(
-            f"Processed block {blockiterval} with {peak_counter} peaks detected."
-        )
+        else:
+            pass
+            # Append to dataset
 
         # pbar.update(task, advance=1)
 
@@ -500,6 +483,9 @@ def process_file(
 @app.command()
 def main(
     datapath: Annotated[Path, typer.Argument(help="Path to the dataset.")],
+    savepath: Annotated[
+        Path | None, typer.Argument(help="Path to save the dataset.")
+    ] = None,
     overwrite: Annotated[
         bool,
         typer.Option("--overwrite", "-o", help="Overwrite existing files."),
@@ -518,6 +504,10 @@ def main(
     configure_logging(verbosity=verbose)
     log.info("Starting ThunderPulse Pulse Detection")
 
+    if savepath is None:
+        savepath = datapath.parent / f"{str(datapath.name)}_pulses"
+    savepath.mkdir(parents=True, exist_ok=True)
+
     sensor_layout_path = datapath / "electrode_layout.json"
     config_path = datapath / "config.json"
 
@@ -533,12 +523,12 @@ def main(
     subdirs = sorted(datapath.glob("*/"))
 
     for recording_path in subdirs:
-        # TODO: Re-implement this for *nix files
-        # Skip if file already exists and overwrite is not set
-        # if save_path.with_suffix(".npz").exists() and not overwrite:
-        #     log.info(f"File {save_path} already exists, skipping.")
-        #     continue
-
+        outfile_dir = savepath / recording_path.name
+        outfile_dir.mkdir(parents=True, exist_ok=True)
+        outfile_path = outfile_dir / "pulses.nix"
+        if outfile_path.exists() and not overwrite:
+            log.info(f"File {outfile_path} already exists, skipping.")
+            continue
         try:
             data = load_data(recording_path, sensor_layout_path)
         except Exception as e:
@@ -546,8 +536,8 @@ def main(
             continue
 
         log.info(f"Processing file: {recording_path}")
-        process_file(
+        process_dataset(
             data,
-            # save_path,
             params=params,
+            output_path=outfile_path,
         )

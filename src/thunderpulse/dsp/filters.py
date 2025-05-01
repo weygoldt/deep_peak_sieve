@@ -1,6 +1,7 @@
 """Signal processing filters"""
 
 from scipy.signal import butter, filtfilt, iirnotch, savgol_filter, sosfiltfilt
+
 from thunderpulse.utils.loggers import get_logger
 
 log = get_logger(__name__)
