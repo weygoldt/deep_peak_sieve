@@ -15,7 +15,7 @@ def bandpass_filter(data, lowcut, highcut, fs, order=5):
     return y
 
 
-def notch_filter(data, notch, fs, Q=40, order=5):
+def notch_filter(data, notch_freq, fs, quality_factor=40, order=5):
     # coeffs = butter(
     #     order,
     #     [notch-2, notch+2],
@@ -25,6 +25,6 @@ def notch_filter(data, notch, fs, Q=40, order=5):
     #     output="sos",
     # )
     # y = sosfiltfilt(sos=coeffs, x=data, axis=0)
-    b, a = iirnotch(notch, Q, fs)
+    b, a = iirnotch(notch_freq, quality_factor, fs)
     y = filtfilt(b, a, data, axis=0)
     return y
