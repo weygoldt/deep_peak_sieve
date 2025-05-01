@@ -28,7 +28,7 @@ def main(
         external_stylesheets=[dbc.themes.DARKLY],
     )
 
-    header = html.H3(children="Thunderpulse", style={"textAlign": "center"})
+    header = html.H4(children="Thunderpulse", style={"textAlign": "center"})
     channel_slider = ui_layout.channel_slider.create_channel_slider()
     time_slider = ui_layout.time_slider.create_time_slider()
     layout_graph_probe = ui_layout.probe_graph.create_layout_probe_graph()
@@ -41,7 +41,7 @@ def main(
 
     app.layout = dbc.Container(
         [
-            # header,
+            header,
             html.Br(),
             dbc.Row(
                 [
@@ -71,9 +71,9 @@ def main(
                                         style={"textAlign": "center"},
                                     ),
                                     visualization_tabs,
-                                    dcc.Store(id="store_umap_selection"),
+                                    # dcc.Store(id="store_umap_selection"),
                                     time_slider,
-                                    dcc.Store(id="peak_storage"),
+                                    # dcc.Store(id="peak_storage"),
                                     html.Br(),
                                 ],
                             ),
