@@ -76,42 +76,26 @@ def callbacks_traces(app):
         notch,
         th_artefact,
     ):
-        if tabs:
-            if not tabs == "tab_traces":
-                fig = default_traces_figure()
-                return fig, None
-        if not filepath:
-            fig = default_traces_figure()
-            return fig, None
+        if tabs and tabs != "tab_traces":
+            return default_traces_figure()
+        if not filepath and not filepath["data_path"]:
+            return default_traces_figure()
 
         data_path = pathlib.Path(filepath["data_path"])
-        if not data_path:
-            fig = default_traces_figure()
-            return fig, None
 
         if isinstance(channels, list):
             channels = np.array(channels)
 
         log.info(f"Loading data into dashboard: {filepath}")
         d = load_data(**filepath)
-        time_display = 1
 
+        time_display = 1
         channels, channel_length = cs.select_channels(
             channels,
             probe_selected_channels,
             d.sensorarray,
         )
 
-        # if channels.size == 1:
-        #     channels = np.append(channels, channels[0])
-        # channel_length = np.arange(channels[0], channels[1]).shape[0] + 1
-        # if channels[0] == channels[1]:
-        #     channel_length = 1
-        # channels = np.arange(channels[0], channels[1] + 1)
-        #
-        # # channels = np.arange(channels)
-        # # channel_length = len(channels)
-        #
         sliced_data, time_slice = ds.select_data(
             d.data, time_index, time_display, d.metadata.samplerate
         )
