@@ -81,6 +81,13 @@ class FindPeaksKwargs(KwargsDataclass):
 
 
 @dataclass(slots=True)
+class PrefilterParameters(KwargsDataclass):
+    """Apply Prefilter operations."""
+
+    common_median_reference: bool = False
+
+
+@dataclass(slots=True)
 class SavgolParameters(KwargsDataclass):
     """Savitzky–Golay filter parameters."""
 
@@ -107,7 +114,7 @@ class NotchParameters(KwargsDataclass):
 
 # higher-level blocks
 @dataclass
-class PeakDetectionParameters:
+class PeakDetectionParameters(KwargsDataclass):
     """Wrapper around *find_peaks* plus global peak-group criteria."""
 
     min_channels: int = 1
@@ -121,7 +128,7 @@ class PeakDetectionParameters:
 
 
 @dataclass
-class FiltersParameters:
+class FiltersParameters(KwargsDataclass):
     """
     Arbitrary sequence of filters.
 
@@ -136,7 +143,7 @@ class FiltersParameters:
 
 
 @dataclass
-class ResampleParameters:
+class ResampleParameters(KwargsDataclass):
     """Zero-hold / FFT resampling settings."""
 
     enabled: bool = True
@@ -159,6 +166,9 @@ class Params:
         Resampling settings.
     """
 
+    prefitering: PrefilterParameters = field(
+        default_factory=PrefilterParameters
+    )
     filters: FiltersParameters = field(default_factory=FiltersParameters)
     peaks: PeakDetectionParameters = field(
         default_factory=PeakDetectionParameters
