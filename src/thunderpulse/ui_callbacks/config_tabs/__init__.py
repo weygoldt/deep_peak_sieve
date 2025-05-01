@@ -1,1 +1,1 @@
-from . import io_card, preprocessing_card
+from . import io_card, offcanvas, preprocessing_card
