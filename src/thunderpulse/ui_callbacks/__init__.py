@@ -3,6 +3,7 @@ from . import (
     channel_slider,
     config_tabs,
     graphs,
+    keyboard_shortcuts,
     save_processing,
     time_slider,
     waveforms,
