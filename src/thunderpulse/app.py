@@ -2,7 +2,7 @@ from typing import Annotated
 
 import dash_bootstrap_components as dbc
 import typer
-from dash import Dash, dcc, html
+from dash import ClientsideFunction, Dash, Input, Output, State, dcc, html
 
 from thunderpulse import ui_callbacks, ui_layout
 from thunderpulse.utils.loggers import configure_logging, get_logger
@@ -36,12 +36,12 @@ def main(
         ui_layout.visualization_tabs.create_visualization_tabs()
     )
     config_tabs = (
-        ui_layout.config_tabs.combine_config_cards.create_config_tabs()
+        ui_layout.config_navbar.combine_navbars.create_config_navbar()
     )
 
     app.layout = dbc.Container(
         [
-            header,
+            # header,
             html.Br(),
             dbc.Row(
                 [
@@ -90,14 +90,17 @@ def main(
     log.info("Initializing config tabs")
     ui_callbacks.config_tabs.preprocessing_card.callbacks(app)
     ui_callbacks.config_tabs.io_card.callbacks(app)
+    ui_callbacks.config_tabs.offcanvas.callbacks(app)
     ui_callbacks.channel_slider.callbacks(app)
     ui_callbacks.time_slider.callbacks(app)
 
     log.info("Initializing graphs")
     ui_callbacks.graphs.traces.callbacks_traces(app)
     ui_callbacks.graphs.probe.callbacks_sensory_array(app)
+    ui_callbacks.keyboard_shortcuts.create_shortcuts(app)
 
     # tables.peak_table_window.callbacks_peak_table_window(app)
+
     app.run(debug=True)
 
 
