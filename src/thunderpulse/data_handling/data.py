@@ -29,7 +29,7 @@ class Paths:
     """Wrapper for paths."""
 
     data_path: str | Path
-    # save_path: str | Path
+    save_path: str | Path
     layout_path: str | Path
 
 
@@ -72,7 +72,9 @@ class Data:
 # TODO: Resolve save path with the save paths returned from get_file_list <---------
 
 
-def load_data(data_path: Path | str, probe_path: Path | str) -> Data:
+def load_data(
+    data_path: Path | str, save_path: Path | str, probe_path: Path | str
+) -> Data:
     """Load a single OpenEphys or WAV data recording session from the specified path."""
     data_path = Path(data_path)
     probe_path = Path(probe_path)
@@ -98,7 +100,7 @@ def load_data(data_path: Path | str, probe_path: Path | str) -> Data:
             Metadata(d.rate, d.channels, d.frames / d.rate, d.frames),
             Paths(
                 data_path,
-                # save_path,
+                save_path,
                 probe_path,
             ),
             SensorArray(
