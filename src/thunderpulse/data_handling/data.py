@@ -90,9 +90,9 @@ def load_data(data_path: Path | str, probe_path: Path | str) -> Data:
 
         d = AudioLoader(file_list)
         d.set_unwrap(thresh=1.5)
+        log.debug("Wav dataset unwrapping enabled")
         ids = np.arange(len(seonsory_array["coordinates"]))
         coordinates = np.array(seonsory_array["coordinates"])
-
         data_c = Data(
             d,
             Metadata(d.rate, d.channels, d.frames / d.rate, d.frames),
@@ -108,6 +108,7 @@ def load_data(data_path: Path | str, probe_path: Path | str) -> Data:
                 coordinates[:, 2],
             ),
         )
+        log.debug("Wav dataset loaded")
     else:
         nix_path = list(data_path.rglob("*.nix"))[0]
         nix_file = nixio.File(str(nix_path), nixio.FileMode.ReadOnly)
@@ -137,6 +138,9 @@ def load_data(data_path: Path | str, probe_path: Path | str) -> Data:
             ),
         )
 
+    log.debug("Data loaded")
+    log.info("Data loaded")
+    log.warning("Data loaded")
     return data_c
 
 

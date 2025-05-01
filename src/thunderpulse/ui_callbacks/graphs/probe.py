@@ -1,4 +1,3 @@
-import nixio
 import numpy as np
 import plotly.graph_objects as go
 from dash import Input, Output, Patch

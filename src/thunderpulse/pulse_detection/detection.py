@@ -1,10 +1,11 @@
-"""Main loop to parse large datasets and collect peaks."""
+"""Main loop to parse large datasets and collect pulses."""
 
 import gc
 from datetime import timedelta
 from pathlib import Path
 from typing import Annotated
 
+import matplotlib.pyplot as plt
 import humanize
 import numpy as np
 import typer
@@ -22,11 +23,10 @@ from thunderpulse.pulse_detection.config import (
 from thunderpulse.utils.loggers import (
     configure_logging,
     get_logger,
-    get_progress,
 )
 
-app = typer.Typer(pretty_exceptions_show_locals=False)
 log = get_logger(__name__)
+app = typer.Typer(pretty_exceptions_show_locals=False)
 
 
 def pretty_duration_humanize(seconds: float) -> str:
@@ -65,16 +65,23 @@ def apply_filters(
         return data
 
     # Apply all filters in sequence
+    log.info("Applying filters")
     for filter_name, filter_params in zip(
         params.filters,
         params.filter_params,
         strict=True,
     ):
         log.debug(f"Applying filter: {filter_name}")
-        data = filter_map[filter_name](
+        log.debug(f"Filter parameters: {filter_params}")
+
+        # Check if filter requires samplerate
+        data_now = filter_map[filter_name](
             data,
-            **filter_params.to_kwargs(keep_none=True),
+            rate,
+            **filter_params.to_kwargs(keep_none=False),
         )
+        log.debug(f"Filter {filter_name} applied")
+
     return data
 
 
@@ -108,21 +115,20 @@ def detect_peaks(
         msg = "Mode must be one of {'peak', 'trough', 'both'}"
         raise ValueError(msg)
 
-    log.debug(f"Starting peak detection with mode: {mode}")
+    log.info(f"Starting peak detection with mode: {mode}")
 
     peaks_list = []
     channels_list = []
 
-    for ch in range(block.shape[1]):
-        signal = block[:, ch]
-
+    for ch in range(block.shape[0]):
+        signal = block[ch, :]
         if find_peaks_kwargs:
             peak_params = find_peaks_kwargs.to_kwargs(keep_none=True)
         else:
             peak_params = {}
 
-        neg_peaks = np.empty(0, dtype=int)
-        pos_peaks = np.empty(0, dtype=int)
+        neg_peaks = np.zeros(0, dtype=int)
+        pos_peaks = np.zeros(0, dtype=int)
 
         if mode in {"peak", "both"}:
             pos_peaks, _ = find_peaks(signal, **peak_params)
@@ -146,6 +152,7 @@ def group_peaks_across_channels_by_time(
 
     Only merges them if they belong to different channels.
     """
+    log.info("Grouping peaks across channels")
     # Flatten out everything and sort
     peaks = np.concatenate(peaks)
     channels = np.concatenate(channels)
@@ -215,6 +222,7 @@ def filter_peak_groups(
         Two lists (same length, same order) containing only the qualifying
         groups.
     """
+    log.info("Filtering peak groups")
     kept_peaks: list[np.ndarray] = []
     kept_channels: list[np.ndarray] = []
 
@@ -232,8 +240,7 @@ def compute_mean_peak(
     channels: np.ndarray,
     around_peak_window: int,
 ) -> np.ndarray | None:
-    """
-    Given a filtered block, a center index, and the channels that had peaks,
+    """Given a filtered block, a center index, and the channels that had peaks,
     return a normalized mean-peak waveform across those channels.
     """
     indexer = np.arange(
@@ -241,20 +248,17 @@ def compute_mean_peak(
         center + around_peak_window,
         dtype=np.int32,
     )
-    if (np.any(indexer < 0)) or (np.any(indexer >= block_filtered.shape[0])):
+    if (np.any(indexer < 0)) or (np.any(indexer >= block_filtered.shape[1])):
         log.warning("Index out of bounds for peak window, skipping peak.")
         return None
 
     channels = np.array(channels, dtype=np.int32)
 
     try:
-        peak_snippet = block_filtered[indexer][:, channels]
-    except:
-        print(indexer)
-        print(channels)
-        print(block_filtered.shape)
-        embed()
-        exit()
+        peak_snippet = block_filtered[channels][:, indexer]
+    except Exception as e:
+        msg = f"Failed to extract peak snippet with indexer {indexer} and channels {channels}: {e}"
+        raise ValueError(msg)
 
     # Pull each channel baseline to zero
     baseline_window = around_peak_window // 4
@@ -273,13 +277,13 @@ def compute_mean_peak(
 
     if np.all(signs > 0):
         log.debug("All peaks are positive")
-        mean_peak = np.mean(peak_snippet, axis=1)
+        mean_peak = np.mean(peak_snippet, axis=0)
     elif np.all(signs < 0):
         log.debug("All peaks are negative")
-        mean_peak = -np.mean(peak_snippet, axis=1)
+        mean_peak = -np.mean(peak_snippet, axis=0)
     else:
         log.debug("Peaks are mixed, flipping signs")
-        mean_peak = np.mean(peak_snippet * signs, axis=1)
+        mean_peak = np.mean(peak_snippet * signs, axis=0)
 
     # Pull the combined baseline to zero
     start_baseline = np.mean(mean_peak[:baseline_window])
@@ -290,34 +294,27 @@ def compute_mean_peak(
     if denominator == 0:
         log.warning("All values are the same, cannot normalize")
         return None
-    mean_peak = mean_peak / denominator
+    # mean_peak = mean_peak / denominator
 
     return mean_peak
 
 
-def process_block(
+def detect_peaks_on_block(
     input_data: np.ndarray, rate: float, params: Params, blockinfo: dict
 ):
     output_data = {
         "peaks": [],
         "channels": [],
-        "amplitudes": [],
         "centers": [],
         "start_stop_index": [],
     }
 
-    # Ensure we treat mono data as [n_samples, 1]
-    if input_data.ndim == 1:
-        input_data = np.expand_dims(input_data, axis=1)
-
-    n_channels = input_data.shape[1]
+    n_channels = input_data.shape[0]
 
     # Apply filtering
-    log.info("Applying filters")
     block_filtered = apply_filters(input_data, rate, params=params.filters)
 
     # Detect peaks on each channel
-    log.info("Detecting peaks")
     peaks_list, channels_list = detect_peaks(
         block_filtered,
         mode=params.peaks.mode,
@@ -333,7 +330,6 @@ def process_block(
     # TODO: Electrode distance sorting from Alex
 
     # Group peaks across channels when they are close in time
-    log.info("Grouping peaks")
     grouped_peaks, grouped_channels = group_peaks_across_channels_by_time(
         peaks_list,
         channels_list,
@@ -341,7 +337,6 @@ def process_block(
     )
 
     # Filter out groups that do not meet the threshold
-    log.info("Filtering peak groups")
     if params.peaks.min_channels > 1:
         grouped_peaks, grouped_channels = filter_peak_groups(
             grouped_peaks, grouped_channels, params.peaks.min_channels
@@ -366,65 +361,63 @@ def process_block(
         chans = np.array(chans)
         pks = np.array(pks)
 
-        if chans.dtype not in [np.int32, np.int64, np.bool]:
-            msg = f"Channel variable type ('chans') is not int32 or int64 but {chans.dtype}"
-            raise TypeError(msg)
-
-        if pks.dtype not in [np.int32, np.int64]:
-            msg = "Peak variable type ('pks') is not int32 or int64 but {pks.dtype}"
-            raise TypeError(msg)
-
-        mean_peak = compute_mean_peak(
-            block_filtered,
-            center,
-            chans,
-            cutout_window_around_peak,
-        )
-
-        if (mean_peak is None) or (len(chans) == 0):
-            msg = "Failed to compute mean peak due to index out of range or degenerate peak shape."
-            log.warning(msg)
-            continue
-
-        # Resample mean peak
-        if params.resample.enabled:
-            log.debug("Resampling mean peak")
-            x = np.linspace(0, len(mean_peak), len(mean_peak))
-            f = interp1d(x, mean_peak, kind="cubic")
-            xnew = np.linspace(0, len(mean_peak), params.resample.n_resamples)
-            mean_peak = f(xnew)
-
         # Mark which channels contributed
         bool_channels = np.zeros(n_channels, dtype=bool)
         bool_channels[chans] = True
 
-        # Amplitudes on each channel
-        amp_index = np.array(
-            [
-                np.argmax(np.abs(block_filtered[pks, ch]))
-                for ch in range(n_channels)
-            ]
-        )
-        amps = np.array(
-            [block_filtered[pks, ch][idx] for ch, idx in enumerate(amp_index)]
-        )
+        # center = center + blockinfo["blockiterval"] * (
+        #     blockinfo["blocksize"] - blockinfo["overlap"]
+        # )
 
-        center = center + blockinfo["blockiterval"] * (
-            blockinfo["blocksize"] - blockinfo["overlap"]
-        )
         start_stop_index = [
             center - cutout_window_around_peak,
             center + cutout_window_around_peak,
         ]
 
         peak_counter += 1
-        output_data["peaks"].append(mean_peak)
+        output_data["peaks"].append(input_data[bool_channels][:, pks])
         output_data["channels"].append(bool_channels)
-        output_data["amplitudes"].append(amps)
         output_data["centers"].append(center)
         output_data["start_stop_index"].append(start_stop_index)
 
     return output_data, peak_counter
+
+    #     mean_peak = compute_mean_peak(
+    #         block_filtered,
+    #         center,
+    #         chans,
+    #         cutout_window_around_peak,
+    #     )
+    #
+    #     if (mean_peak is None) or (len(chans) == 0):
+    #         msg = "Failed to compute mean peak due to index out of range or degenerate peak shape."
+    #         log.warning(msg)
+    #         continue
+    #
+    #     # Resample mean peak
+    #     if params.resample.enabled:
+    #         log.debug("Resampling mean peak")
+    #         x = np.linspace(0, len(mean_peak), len(mean_peak))
+    #         f = interp1d(x, mean_peak, kind="cubic")
+    #         xnew = np.linspace(0, len(mean_peak), params.resample.n_resamples)
+    #         mean_peak = f(xnew)
+    #
+    #     # Amplitudes on each channel
+    #     amp_index = np.array(
+    #         [
+    #             np.argmax(np.abs(block_filtered[ch, pks]))
+    #             for ch in range(n_channels)
+    #         ]
+    #     )
+    #     amps = np.array(
+    #         [block_filtered[ch, pks][idx] for ch, idx in enumerate(amp_index)]
+    #     )
+    #
+    # for p in output_data["peaks"]:
+    #     plt.plot(p)
+    # plt.show()
+    #
+    # return output_data, peak_counter
 
 
 def process_file(
@@ -436,33 +429,42 @@ def process_file(
         msg = "Data rate is None, cannot process file."
         raise ValueError(msg)
     rate = data.metadata.samplerate
-
     blocksize = int(np.ceil(rate * params.buffersize_s))
     overlap = blocksize // 10
 
     num_blocks = int(np.ceil(data.metadata.frames / (blocksize - overlap)))
-    with get_progress() as pbar:
-        desc = "Processing file"
-        task = pbar.add_task(desc, total=num_blocks, transient=True)
-        for blockiterval, block in enumerate(
-            data.blocks(blocksize=blocksize, overlap=overlap)
-        ):
-            blockinfo = {
-                "blockiterval": blockiterval,
-                "blocksize": blocksize,
-                "overlap": overlap,
-            }
+    # with get_progress() as pbar:
+    #     desc = "Processing file"
+    #     task = pbar.add_task(desc, total=num_blocks, transient=True)
+    for blockiterval, block in enumerate(
+        data.blocks(blocksize=blocksize, overlap=overlap)
+    ):
+        blockinfo = {
+            "blockiterval": blockiterval,
+            "blocksize": blocksize,
+            "overlap": overlap,
+        }
 
-            # TODO: Why is my linter crying about this?
-            block_peaks, peak_counter = process_block(
-                block, rate, params, blockinfo
-            )
+        # reshape to match (n_channels, n_samples)
+        if len(block.shape) == 1:
+            block = np.expand_dims(block, axis=1)
+        if block.shape[0] != data.metadata.channels:
+            block = np.transpose(block)
 
-            log.info(
-                f"Processed block {blockiterval} with {peak_counter} peaks detected."
-            )
+        block_peaks, peak_counter = detect_peaks_on_block(
+            block, rate, params, blockinfo
+        )
 
-            pbar.update(task, advance=1)
+        for i in range(len(block_peaks["peaks"])):
+            plt.plot(block_peaks["peaks"][i].T)
+            plt.show()
+        exit()
+
+        log.warning(
+            f"Processed block {blockiterval} with {peak_counter} peaks detected."
+        )
+
+        # pbar.update(task, advance=1)
 
         # TODO: Here Nix file saving instead of Numpy
         gc.collect()  # TODO: Check if this has actually an effect
@@ -471,8 +473,6 @@ def process_file(
 @app.command()
 def main(
     datapath: Annotated[Path, typer.Argument(help="Path to the dataset.")],
-    probepath: Annotated[Path, typer.Option(help="Path to the probe file.")],
-    configpath: Annotated[Path, typer.Option(help="Path to the config file.")],
     overwrite: Annotated[
         bool,
         typer.Option("--overwrite", "-o", help="Overwrite existing files."),
@@ -489,8 +489,20 @@ def main(
     6) Dataset saving
     """
     configure_logging(verbosity=verbose)
+    log.info("Starting ThunderPulse Pulse Detection")
 
-    params = Params().from_json(str(configpath))
+    sensor_layout_path = datapath / "electrode_layout.json"
+    config_path = datapath / "config.json"
+
+    if not config_path.exists():
+        msg = f"No config file found at {config_path}. Please provide a config file."
+        raise FileNotFoundError(msg)
+
+    if not sensor_layout_path.exists():
+        msg = f"No probe file found at {sensor_layout_path}. Please provide a probe file."
+        raise FileNotFoundError(msg)
+
+    params = Params().from_json(str(config_path))
     subdirs = sorted(datapath.glob("*/"))
 
     for recording_path in subdirs:
@@ -501,17 +513,14 @@ def main(
         #     continue
 
         try:
-            data = load_data(recording_path, probepath)
+            data = load_data(recording_path, sensor_layout_path)
         except Exception as e:
             log.error(f"Failed to load {recording_path}: {e}")
             continue
 
+        log.info(f"Processing file: {recording_path}")
         process_file(
             data,
             # save_path,
             params=params,
         )
-
-
-if __name__ == "__main__":
-    app()

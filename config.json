@@ -4,7 +4,7 @@
     "filter_params": [
       {
         "polyorder": 3,
-        "window_length": 5
+        "window_length_s": 0.0005
       }
     ],
     "filters": [
@@ -16,7 +16,7 @@
     "find_peaks_kwargs": {
       "distance": null,
       "height": 0.001,
-      "prominence": null,
+      "prominence": 0.001,
       "threshold": null,
       "width": null
     },
