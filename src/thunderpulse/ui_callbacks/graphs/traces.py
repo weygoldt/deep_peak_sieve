@@ -1,17 +1,28 @@
 import pathlib
+import re
 
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from dash import Input, Output
 from IPython import embed
+from nixio import file
 from plotly import subplots
 
 import thunderpulse.ui_callbacks.graphs.channel_selection as cs
 from thunderpulse.data_handling.data import load_data
-from thunderpulse.data_handling.preprocessing import (
-    preprocessing_current_slice,
+from thunderpulse.pulse_detection.config import (
+    BandpassParameters,
+    FiltersParameters,
+    NotchParameters,
+    Params,
+    PeakDetectionParameters,
+    PrefilterParameters,
+    ResampleParameters,
+    SavgolParameters,
 )
+from thunderpulse.pulse_detection.detection import apply_filters
+from thunderpulse.utils.cleaning import remove_none_inputs
 from thunderpulse.utils.loggers import get_logger
 
 from . import data_selection as ds
@@ -38,53 +49,89 @@ def default_traces_figure():
 def callbacks_traces(app):
     @app.callback(
         Output("traces", "figure"),
-        Output("peak_storage", "data"),
-        Input("vis_tabs", "active_tab"),
-        Input("time_slider", "value"),
-        Input("channel_range_slider", "value"),
-        Input("sw_bandpass_filter", "value"),
-        Input("lowcutoff", "value"),
-        Input("highcutoff", "value"),
-        Input("sw_common_reference", "value"),
-        Input("filepath", "data"),
-        Input("probe", "selectedData"),
-        Input("sw_peaks_current_window", "value"),
-        Input("n_median", "value"),
-        Input("sw_processed", "value"),
-        Input("exclude_radius", "value"),
-        Input("sw_merged_peaks", "value"),
-        Input("sw_notch_filter", "value"),
-        Input("notch", "value"),
-        Input("threshold_artefact", "value"),
+        # Filter
+        inputs={
+            "general": {
+                "filepath": Input("filepath", "data"),
+                "vis_tabs": Input("vis_tabs", "active_tab"),
+                "time_slider": Input("time_slider", "value"),
+                "channels": Input("channel_range_slider", "value"),
+                "probe_selected_channels": Input("probe", "selectedData"),
+            },
+            "pre_filter": {
+                "common_median_reference": Input(
+                    "sw_common_reference", "value"
+                ),
+            },
+            "savgol": {
+                "window_length": Input("num_savgol_window_length", "value"),
+                "polyorder": Input("num_savgol_polyorder", "value"),
+            },
+            "bandpass": {
+                "lowcut": Input("num_bandpass_lowcutoff", "value"),
+                "highcut": Input("num_bandpass_highcutoff", "value"),
+            },
+            "notch": {
+                "notch_freq": Input("num_notchfilter_freq", "value"),
+                "quality_factor": Input("num_notchfilter_quality", "value"),
+            },
+            "pulse": {
+                "min_channels": Input("num_pulse_min_channels", "value"),
+                "mode": Input("select_pulse_mode", "value"),
+                "min_peak_distance_s": Input(
+                    "num_pulse_min_peak_distance", "value"
+                ),
+                "cutout_window_around_peak_s": Input(
+                    "num_pulse_waveform", "value"
+                ),
+            },
+            "findpeaks": {
+                "height": Input("num_findpeaks_height", "value"),
+                "threshold": Input("num_findpeaks_threshold", "value"),
+                "distance": Input("num_findpeaks_distance", "value"),
+                "prominence": Input("num_findpeaks_prominence", "value"),
+                "width": Input("num_findpeaks_width", "value"),
+            },
+            "resample": {
+                "enabled": Input("sw_resampling_enable", "value"),
+                "n_resamples": Input("num_resampling_n", "value"),
+            },
+        },
     )
     def update_graph_traces(
-        tabs,
-        time_index: int,
-        channels,
-        switch_bandpass,
-        low,
-        high,
-        switch_common_reference,
-        filepath,
-        probe_selected_channels,
-        sw_peak_detection,
-        n_median,
-        sw_processed,
-        exclude_radius,
-        sw_merged_peaks,
-        sw_notch_filter,
+        general,
+        pre_filter,
+        savgol,
+        bandpass,
         notch,
-        th_artefact,
+        pulse,
+        findpeaks,
+        resample,
     ):
+        filepath, tabs, time_index, channels, probe_selected_channels = (
+            general.values()
+        )
         if tabs and tabs != "tab_traces":
             return default_traces_figure()
-        if not filepath and not filepath["data_path"]:
+        if not filepath:
+            return default_traces_figure()
+        if not filepath["data_path"]:
             return default_traces_figure()
 
-        data_path = pathlib.Path(filepath["data_path"])
+        prefilter = PrefilterParameters(**pre_filter)
+        filters = FiltersParameters(
+            filters=["savgol", "bandpass", "notch"],
+            filter_params=[
+                SavgolParameters(**savgol),
+                BandpassParameters(**bandpass),
+                NotchParameters(**notch),
+            ],
+        )
+        peaks = PeakDetectionParameters(**pulse, find_peaks_kwargs=findpeaks)
+        resample = ResampleParameters(**resample)
+        params = Params(prefilter, filters, peaks, resample)
 
-        if isinstance(channels, list):
-            channels = np.array(channels)
+        channels = np.array(channels)
 
         log.info(f"Loading data into dashboard: {filepath}")
         d = load_data(**filepath)
@@ -101,22 +148,25 @@ def callbacks_traces(app):
         )
         index_time_start = int(time_slice[0] * d.metadata.samplerate)
 
+        sliced_data = apply_filters(
+            sliced_data, d.metadata.samplerate, filters
+        )
         # if sw_processed:
         #     recording = nix_file.blocks[0].data_arrays["processed_data"]
         #     sliced_data, time_slice = ds.select_data(
         #         recording, time_index, time_display, sample_rate
         #     )
         # else:
-        sliced_data = preprocessing_current_slice(
-            sliced_data,
-            d.metadata.samplerate,
-            switch_bandpass,
-            low,
-            high,
-            switch_common_reference,
-            sw_notch_filter,
-            notch,
-        )
+        # sliced_data = preprocessing_current_slice(
+        #     sliced_data,
+        #     d.metadata.samplerate,
+        #     switch_bandpass,
+        #     low,
+        #     high,
+        #     switch_common_reference,
+        #     sw_notch_filter,
+        #     notch,
+        # )
 
         colors = [*px.colors.qualitative.Light24, *px.colors.qualitative.Vivid]
         fig = subplots.make_subplots(
@@ -140,7 +190,6 @@ def callbacks_traces(app):
             rows=list(np.arange(channel_length) + 1),
             cols=[1] * channel_length,
         )
-        peaks_ = None
         # if sw_peak_detection:
         #     peaks = processing.peak_detection.peaks_current_slice(
         #         sliced_data, index_time_start, channels, n_median, th_artefact
@@ -215,4 +264,4 @@ def callbacks_traces(app):
         )
         # nix_file.close()
 
-        return fig, peaks_
+        return fig
