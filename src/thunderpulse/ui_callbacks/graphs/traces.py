@@ -5,6 +5,8 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from dash import Input, Output
+from IPython import embed
+from IPython.core.interactiveshell import is_integer_string
 from plotly import subplots
 
 import thunderpulse.ui_callbacks.graphs.channel_selection as cs
@@ -12,6 +14,7 @@ from thunderpulse.data_handling.data import load_data
 from thunderpulse.pulse_detection.config import (
     BandpassParameters,
     FiltersParameters,
+    FindPeaksKwargs,
     NotchParameters,
     Params,
     PeakDetectionParameters,
@@ -19,7 +22,11 @@ from thunderpulse.pulse_detection.config import (
     ResampleParameters,
     SavgolParameters,
 )
-from thunderpulse.pulse_detection.detection import apply_filters
+from thunderpulse.pulse_detection.detection import (
+    apply_filters,
+    detect_peaks_on_block,
+)
+
 # from thunderpulse.utils.cleaning import remove_none_inputs
 from thunderpulse.utils.loggers import get_logger
 
@@ -55,6 +62,7 @@ def callbacks_traces(app):
                 "time_slider": Input("time_slider", "value"),
                 "channels": Input("channel_range_slider", "value"),
                 "probe_selected_channels": Input("probe", "selectedData"),
+                "detect_pulses": Input("sw_detect_pulses", "value"),
             },
             "pre_filter": {
                 "common_median_reference": Input(
@@ -62,7 +70,7 @@ def callbacks_traces(app):
                 ),
             },
             "savgol": {
-                "window_length": Input("num_savgol_window_length", "value"),
+                "window_length_s": Input("num_savgol_window_length", "value"),
                 "polyorder": Input("num_savgol_polyorder", "value"),
             },
             "bandpass": {
@@ -106,9 +114,14 @@ def callbacks_traces(app):
         findpeaks,
         resample,
     ):
-        filepath, tabs, time_index, channels, probe_selected_channels = (
-            general.values()
-        )
+        (
+            filepath,
+            tabs,
+            time_index,
+            channels,
+            probe_selected_channels,
+            detect_pulses,
+        ) = general.values()
         if tabs and tabs != "tab_traces":
             return default_traces_figure()
         if not filepath:
@@ -116,15 +129,29 @@ def callbacks_traces(app):
         if not filepath["data_path"]:
             return default_traces_figure()
 
+        d = load_data(**filepath)
+
+        pre_filter = _check_config(pre_filter)
+        apply_filters_names = []
+        apply_filters_params = []
+        filter_params_function = [savgol, bandpass, notch]
+        filter_names = FiltersParameters().filters
+        filter_params = [SavgolParameters, BandpassParameters, NotchParameters]
+        for f_name, f_params, f_params_func in zip(
+            filter_names, filter_params, filter_params_function, strict=True
+        ):
+            check_f = _check_config(f_params_func)
+            if check_f:
+                apply_filters_params.append(f_params(**f_params_func))
+                apply_filters_names.append(f_name)
+
         prefilter = PrefilterParameters(**pre_filter)
+
         filters = FiltersParameters(
-            filters=["savgol", "bandpass", "notch"],
-            filter_params=[
-                SavgolParameters(**savgol),
-                BandpassParameters(**bandpass),
-                NotchParameters(**notch),
-            ],
+            filters=apply_filters_names, filter_params=apply_filters_params
         )
+
+        findpeaks = FindPeaksKwargs(**findpeaks)
         peaks = PeakDetectionParameters(**pulse, find_peaks_kwargs=findpeaks)
         resample = ResampleParameters(**resample)
         params = Params(prefilter, filters, peaks, resample)
@@ -132,7 +159,6 @@ def callbacks_traces(app):
         channels = np.array(channels)
 
         log.info(f"Loading data into dashboard: {filepath}")
-        d = load_data(**filepath)
 
         time_display = 1
         channels, channel_length = cs.select_channels(
@@ -147,24 +173,8 @@ def callbacks_traces(app):
         index_time_start = int(time_slice[0] * d.metadata.samplerate)
 
         sliced_data = apply_filters(
-            sliced_data, d.metadata.samplerate, filters
+            sliced_data, d.metadata.samplerate, prefilter, filters
         )
-        # if sw_processed:
-        #     recording = nix_file.blocks[0].data_arrays["processed_data"]
-        #     sliced_data, time_slice = ds.select_data(
-        #         recording, time_index, time_display, sample_rate
-        #     )
-        # else:
-        # sliced_data = preprocessing_current_slice(
-        #     sliced_data,
-        #     d.metadata.samplerate,
-        #     switch_bandpass,
-        #     low,
-        #     high,
-        #     switch_common_reference,
-        #     sw_notch_filter,
-        #     notch,
-        # )
 
         colors = [*px.colors.qualitative.Light24, *px.colors.qualitative.Vivid]
         fig = subplots.make_subplots(
@@ -188,28 +198,27 @@ def callbacks_traces(app):
             rows=list(np.arange(channel_length) + 1),
             cols=[1] * channel_length,
         )
-        # if sw_peak_detection:
-        #     peaks = processing.peak_detection.peaks_current_slice(
-        #         sliced_data, index_time_start, channels, n_median, th_artefact
-        #     )
-        #
-        #     fig.add_traces(
-        #         [
-        #             go.Scattergl(
-        #                 x=peaks[peaks["channel"] == i]["spike_index"]
-        #                 / d.metadata.samplerate,
-        #                 y=peaks[peaks["channel"] == i]["amplitude"],
-        #                 mode="markers",
-        #                 marker_symbol="arrow",
-        #                 marker_color="red",
-        #                 marker_size=10,
-        #                 name=f"Peaks {i}",
-        #             )
-        #             for i in channels
-        #         ],
-        #         rows=list(np.arange(channel_length) + 1),
-        #         cols=[1] * channel_length,
-        #     )
+        if detect_pulses:
+            output = detect_peaks_on_block(
+                sliced_data, d.metadata.samplerate, prefilter, params
+            )
+            if output:
+                fig.add_traces(
+                    [
+                        go.Scattergl(
+                            x=output["centers"] / d.metadata.samplerate,
+                            y=sliced_data[output["centers"], ch],
+                            mode="markers",
+                            marker_symbol="arrow",
+                            marker_color="red",
+                            marker_size=10,
+                            name=f"Peaks {ch}",
+                        )
+                        for ch in channels
+                    ],
+                    rows=list(np.arange(channel_length) + 1),
+                    cols=[1] * channel_length,
+                )
         #
         #     peaks_ = dict(
         #         index=np.arange(peaks.size),
@@ -260,6 +269,21 @@ def callbacks_traces(app):
             template="plotly_dark",
             margin=dict(l=0, r=0, t=0, b=0),
         )
-        # nix_file.close()
 
         return fig
+
+
+def _check_config(d: dict) -> dict:
+    new_dict = {}
+    for key, value in d.items():
+        if isinstance(value, dict):
+            nested_dict = _check_config(value)
+        elif isinstance(value, list):
+            if np.any(value):
+                new_dict[key] = value
+        elif value:
+            new_dict[key] = value
+        else:
+            continue
+
+    return new_dict
