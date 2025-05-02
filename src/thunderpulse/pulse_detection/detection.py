@@ -5,20 +5,22 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Annotated
 
-import nixio
-from IPython import embed
 import humanize
 import matplotlib.pyplot as plt
+import nixio
 import numpy as np
 import typer
-from scipy.signal import find_peaks
+from IPython import embed
 from scipy.interpolate import interp1d
+from scipy.signal import find_peaks
 
 from thunderpulse.data_handling.data import Data, load_data
+from thunderpulse.dsp.common_reference import common_median_reference
 from thunderpulse.pulse_detection.config import (
     FiltersParameters,
     FindPeaksKwargs,
     Params,
+    PrefilterParameters,
     filter_map,
 )
 from thunderpulse.utils.loggers import (
@@ -49,7 +51,10 @@ def initialize_dataset() -> dict:
 
 
 def apply_filters(
-    data: np.ndarray, rate: float, params: FiltersParameters
+    data: np.ndarray,
+    rate: float,
+    prefiltering: PrefilterParameters,
+    params: FiltersParameters,
 ) -> np.ndarray:
     """Apply the specified filters to the data."""
     if not isinstance(params.filters, list):
@@ -64,6 +69,11 @@ def apply_filters(
     if len(params.filters) == 0:
         log.debug("No filters applied")
         return data
+
+    # PreFilter operations
+    # TODO: This should be a list of operations to apply before filtering
+    if prefiltering.common_median_reference:
+        data = common_median_reference(data)
 
     # Apply all filters in sequence
     log.info("Applying filters")
@@ -121,8 +131,8 @@ def detect_peaks(
     peaks_list = []
     channels_list = []
 
-    for ch in range(block.shape[0]):
-        signal = block[ch, :]
+    for ch in range(block.shape[1]):
+        signal = block[:, ch]
         if find_peaks_kwargs:
             peak_params = find_peaks_kwargs.to_kwargs(keep_none=True)
         else:
@@ -278,12 +288,15 @@ def compute_mean_peak(
 def detect_peaks_on_block(
     input_data: np.ndarray,
     rate: float,
+    prefilter: PrefilterParameters,
     params: Params,
 ) -> dict | None:
-    n_channels = input_data.shape[0]
+    n_channels = input_data.shape[1]
 
     # Apply filtering
-    block_filtered = apply_filters(input_data, rate, params=params.filters)
+    block_filtered = apply_filters(
+        input_data, rate, prefilter, params=params.filters
+    )
 
     # Detect peaks on each channel
     peaks_list, channels_list = detect_peaks(
@@ -292,11 +305,25 @@ def detect_peaks_on_block(
         find_peaks_kwargs=params.peaks.find_peaks_kwargs,
     )
 
+    # NOTE: Take default Values if is None
     # Convert config paramters from seconds to samples
-    min_peak_distance = int(np.ceil(params.peaks.min_peak_distance_s * rate))
-    cutout_window_around_peak = int(
-        np.ceil(params.peaks.cutout_window_around_peak_s * rate)
-    )
+    if not params.peaks.min_peak_distance_s:
+        min_peak_distance = int(
+            np.ceil(Params().peaks.min_peak_distance_s * rate)
+        )
+    else:
+        min_peak_distance = int(
+            np.ceil(params.peaks.min_peak_distance_s * rate)
+        )
+
+    if not params.peaks.cutout_window_around_peak_s:
+        cutout_window_around_peak = int(
+            np.ceil(Params().peaks.cutout_window_around_peak_s * rate)
+        )
+    else:
+        cutout_window_around_peak = int(
+            np.ceil(params.peaks.cutout_window_around_peak_s * rate)
+        )
 
     # TODO: Electrode distance sorting from Alex
 
@@ -308,9 +335,14 @@ def detect_peaks_on_block(
     )
 
     # Filter out groups that do not meet the threshold
-    if params.peaks.min_channels > 1:
+    if not params.peaks.min_channels:
+        min_channels = Params().peaks.min_channels
+    else:
+        min_channels = params.peaks.min_channels
+
+    if min_channels > 1:
         grouped_peaks, grouped_channels = filter_peak_groups(
-            grouped_peaks, grouped_channels, params.peaks.min_channels
+            grouped_peaks, grouped_channels, min_channels
         )
 
     # Compute means of each group
@@ -319,6 +351,7 @@ def detect_peaks_on_block(
     if len(grouped_peaks) == 0:
         msg = "No peaks found in block, skipping."
         log.debug(msg)
+        log.warning("No peaks detected")
         return None
 
     centers = [int(np.mean(g)) for g in grouped_peaks]
@@ -348,6 +381,7 @@ def detect_peaks_on_block(
         "start_stop_index": start_stop_index,
     }
 
+    log.warning("Detecting new Peaks")
     for _, (pks, chans, center) in enumerate(
         zip(grouped_peaks, grouped_channels, centers, strict=False)
     ):
@@ -364,12 +398,16 @@ def detect_peaks_on_block(
             center - cutout_window_around_peak,
             center + cutout_window_around_peak,
         ]
+        if start_stop_index[0] < 0:
+            continue
+
+        p = input_data[start_stop_index[0] : start_stop_index[1], :].T
+        if p.shape[1] != cutout_window_around_peak * 2:
+            continue
 
         peak_counter += 1
 
-        output_data["peaks"][peak_counter - 1, :] = input_data[
-            :, start_stop_index[0] : start_stop_index[1]
-        ]
+        output_data["peaks"][peak_counter - 1, :] = p
         output_data["channels"][peak_counter - 1, :] = bool_channels
         output_data["centers"][peak_counter - 1] = center
         output_data["start_stop_index"][peak_counter - 1] = start_stop_index
