@@ -23,7 +23,7 @@ def savitzky_golay_filter(data, fs, window_length_s, polyorder):
     )
 
 
-def bandpass_filter(data, fs, lowcut, highcut, order):
+def bandpass_filter(data, fs, lowcut, highcut, order=5):
     coeffs = butter(
         order,
         [lowcut, highcut],
@@ -32,9 +32,11 @@ def bandpass_filter(data, fs, lowcut, highcut, order):
         fs=fs,
         output="sos",
     )
-    return sosfiltfilt(sos=coeffs, x=data, axis=-1)
+
+    return sosfiltfilt(sos=coeffs, x=data, axis=0)
 
 
-def notch_filter(data, fs, notch, q, order):
-    b, a = iirnotch(notch, q, fs)
-    return filtfilt(b, a, data, axis=-1)
+def notch_filter(data, fs, notch_freq, quality_factor=40):
+    b, a = iirnotch(notch_freq, quality_factor, fs)
+
+    return filtfilt(b, a, data, axis=0)
