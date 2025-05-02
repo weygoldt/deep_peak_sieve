@@ -2,7 +2,7 @@ import dash_bootstrap_components as dbc
 from dash import html
 
 
-def create_io_offcanvas() -> dbc.Card:
+def create_paths_offcanvas() -> dbc.Card:
     """Create and return an IO Card.
 
     Returns
@@ -35,20 +35,12 @@ def create_io_offcanvas() -> dbc.Card:
                 html.Br(),
                 html.P("Layout of Probe/Grid", className="card-text"),
                 dbc.Textarea(
-                    # type="text",
                     placeholder="Please put in your path to the probe/grid layout",
                     id="probepath",
                     persistence=True,
                     persistence_type="local",
                     className="card-text",
                 ),
-                html.Br(),
-                # dbc.Button(
-                #     "Load the data",
-                #     color="warning",
-                #     id="bt_load_data",
-                #     n_clicks=0,
-                # ),
             ]
         )
     )

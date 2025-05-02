@@ -1,17 +1,17 @@
 import dash_bootstrap_components as dbc
 from dash import html
 
-from thunderpulse.ui_layout.config_navbar.filter_card import (
+from thunderpulse.ui_layout.config.filter_card import (
     create_filter_offcanvas,
 )
-from thunderpulse.ui_layout.config_navbar.io_card import create_io_offcanvas
-from thunderpulse.ui_layout.config_navbar.pulse_detection import (
+from thunderpulse.ui_layout.config.paths_card import create_paths_offcanvas
+from thunderpulse.ui_layout.config.pulse_detection import (
     create_pulse_offcanvas,
 )
 
 
-def create_config_navbar():
-    io_offcanvas = create_io_offcanvas()
+def create_config():
+    io_offcanvas = create_paths_offcanvas()
     filter_offcanvas = create_filter_offcanvas()
     pulse_offcanvas = create_pulse_offcanvas()
 
@@ -80,6 +80,14 @@ def create_config_navbar():
                                     "Load",
                                     color="warning",
                                     id="bt_load_data",
+                                    n_clicks=0,
+                                ),
+                            ),
+                            dbc.Col(
+                                dbc.Button(
+                                    "Save",
+                                    color="warning",
+                                    id="bt_save_config",
                                     n_clicks=0,
                                 ),
                             ),
