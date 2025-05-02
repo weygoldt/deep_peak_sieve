@@ -11,6 +11,7 @@ from plotly import subplots
 
 import thunderpulse.ui_callbacks.graphs.channel_selection as cs
 from thunderpulse.data_handling.data import load_data
+from thunderpulse.utils.check_config import check_config_params
 from thunderpulse.pulse_detection.config import (
     BandpassParameters,
     FiltersParameters,
@@ -273,17 +274,3 @@ def callbacks_traces(app):
         return fig
 
 
-def _check_config(d: dict) -> dict:
-    new_dict = {}
-    for key, value in d.items():
-        if isinstance(value, dict):
-            nested_dict = _check_config(value)
-        elif isinstance(value, list):
-            if np.any(value):
-                new_dict[key] = value
-        elif value:
-            new_dict[key] = value
-        else:
-            continue
-
-    return new_dict

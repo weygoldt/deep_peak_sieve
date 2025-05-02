@@ -1,7 +1,7 @@
 from . import (
     calc_umap,
     channel_slider,
-    config_tabs,
+    config,
     graphs,
     keyboard_shortcuts,
     save_processing,
