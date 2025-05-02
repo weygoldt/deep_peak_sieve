@@ -2,7 +2,7 @@ from typing import Annotated
 
 import dash_bootstrap_components as dbc
 import typer
-from dash import ClientsideFunction, Dash, Input, Output, State, dcc, html
+from dash import  Dash, dcc, html
 
 from thunderpulse import ui_callbacks, ui_layout
 from thunderpulse.utils.loggers import configure_logging, get_logger
