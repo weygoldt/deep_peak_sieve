@@ -1,7 +1,7 @@
-from dash import ClientsideFunction, Dash, Input, Output, State, dcc, html
+from dash import ClientsideFunction, Dash, Input, Output, State
 
 
-def create_shortcuts(app):
+def create_shortcuts(app: Dash) -> None:
     app.clientside_callback(
         """
             function(id) {
