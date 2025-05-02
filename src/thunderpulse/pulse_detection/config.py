@@ -84,7 +84,6 @@ class BandpassParameters(KwargsDataclass):
     lowcut: float = 0.1
     highcut: float = 3_000.0
     order: int = 5
-    fs: float = 30_000.0
 
 
 @dataclass
@@ -92,7 +91,6 @@ class NotchParameters(KwargsDataclass):
     """Notch filter (single frequency) parameters."""
 
     notch_freq: float = 50.0
-    fs: float = 30_000.0
     quality_factor: float = 30.0
 
 
@@ -120,9 +118,15 @@ class FiltersParameters(KwargsDataclass):
     parameter objects (must be the same length / order).
     """
 
-    filters: list[str] = field(default_factory=lambda: ["savgol"])
+    filters: list[str] = field(
+        default_factory=lambda: ["savgol", "bandpass", "notch"]
+    )
     filter_params: list[KwargsDataclass] = field(
-        default_factory=lambda: [SavgolParameters()]
+        default_factory=lambda: [
+            SavgolParameters(),
+            BandpassParameters(),
+            NotchParameters(),
+        ]
     )
 
 
