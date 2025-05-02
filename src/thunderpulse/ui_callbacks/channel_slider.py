@@ -1,7 +1,5 @@
-import nixio
 import numpy as np
 from dash import Input, Output
-from IPython import embed
 
 from thunderpulse.data_handling.data import load_data
 

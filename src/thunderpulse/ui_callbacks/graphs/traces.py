@@ -5,8 +5,6 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from dash import Input, Output
-from IPython import embed
-from nixio import file
 from plotly import subplots
 
 import thunderpulse.ui_callbacks.graphs.channel_selection as cs

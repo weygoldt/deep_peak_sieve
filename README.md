@@ -9,10 +9,8 @@ emitters that may change position in multichannel biological signals.
 
 ### Short-Term
 
-- [ ] [Patrick] [] Export to nix file 
-- [ ] [Alex] Seperate the dash callbacks to the ui folder
+- [ ] [Patrick] Export to nix file 
 - [ ] [Patrick] Build an embedder base class for umap/VAE/PCA...
-- [ ] [Alex] Dataclass in dcc.Storage 
 - [ ] Build GUI elements to save configs to `scipy.signal.find_peaks`
 - [ ] [Patrick] Add logging to the dash application
 
@@ -27,6 +25,8 @@ emitters that may change position in multichannel biological signals.
 
 ## DONE 🎉
 
+- [x] [Alex] Dataclass in dcc.Storage 
+- [x] [Alex] Seperate the dash callbacks to the ui folder
 - [x] [Patrick] Use the `get_file_list` function to get the wav files and raise error if returned list is nested to prevent opening too many files at once (otherwise this crashes the `wavefile` library that the `AudioLoader` uses as backend)
 - [x] [Alex] Build data loading classes to unify nix data and wav files
 - [x] [Patrick] Outsource the exploration file

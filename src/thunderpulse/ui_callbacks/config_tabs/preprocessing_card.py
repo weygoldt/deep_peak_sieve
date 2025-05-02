@@ -1,4 +1,3 @@
-import nixio
 import numpy as np
 from dash import Dash, Input, Output, State
 

@@ -18,6 +18,7 @@ dependencies = [
     "orjson>=3.10.16",
     "polars>=1.27.1",
     "probeinterface>=0.2.26",
+    "pyqt6>=6.9.0",
     "rich>=14.0.0",
     "scikit-learn>=1.6.1",
     "seaborn>=0.13.2",
@@ -41,13 +42,14 @@ dev = [
 package = true
 
 [project.scripts]
-collect_peaks = "thunderpulse.collection.collect_peaks:app"
+detect_pulses = "thunderpulse.pulse_detection.detection:app"
 sample_peaks = "thunderpulse.sampling.sample_peaks:app"
 label_peaks = "thunderpulse.labeling.label_peaks:app"
 explore = "thunderpulse.exploration:app"
 train_classifier = "thunderpulse.classification.train_classifier:app"
 classify_peaks = "thunderpulse.classification.classify_peaks:app"
 gui = "thunderpulse.app:main"
+logtest = "thunderpulse.utils.loggers:main"
 
 
 [tool.ruff]

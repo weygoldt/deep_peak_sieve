@@ -8,11 +8,11 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from scipy.signal import savgol_filter
 
-from thunderpulse.data_handling.filters import (
+from thunderpulse.dsp.filters import (
     bandpass_filter,
     notch_filter,
+    savitzky_golay_filter,
 )
 
 _INDENT = 2
@@ -52,32 +52,14 @@ class KwargsDataclass:
 class FindPeaksKwargs(KwargsDataclass):
     """Arguments forwarded to :func:`scipy.signal.find_peaks`."""
 
+    # TODO: This should be in seconds and then converted to samples
+    # once the samplerate is known
+
     height: float | np.ndarray | None = None
     threshold: float | np.ndarray | None = None
     distance: float | None = None
-    prominence: float | np.ndarray | None = None
+    prominence: float | np.ndarray | None = 0.001
     width: float | np.ndarray | None = None
-
-    # def to_kwargs(self, *, keep_none: bool = False) -> dict[str, Any]:
-    #     """Convert to plain ``dict`` suitable for ``scipy.signal.find_peaks``.
-    #
-    #     By default keys whose value is ``None`` are dropped.
-    #
-    #     Examples
-    #     --------
-    #     >>> fp = FindPeaksKwargs(height=0.5, prominence=None)
-    #     >>> fp.to_kwargs()
-    #     {'height': 0.5}
-    #     >>> signal.find_peaks(x, **fp.to_kwargs())
-    #     """
-    #     d = asdict(self)
-    #     if not keep_none:
-    #         d = {k: v for k, v in d.items() if v is not None}
-    #     return d
-    #
-    # def __iter__(self) -> Iterator[tuple[str, Any]]:
-    #     """Allow ``dict(fp_kwargs)`` or ``**dict(fp_kwargs)``."""
-    #     yield from self.to_kwargs().items()
 
 
 @dataclass(slots=True)
@@ -91,7 +73,7 @@ class PrefilterParameters(KwargsDataclass):
 class SavgolParameters(KwargsDataclass):
     """Savitzky–Golay filter parameters."""
 
-    window_length: int = 5
+    window_length_s: float = 0.0005  # seconds
     polyorder: int = 3
 
 
@@ -122,7 +104,7 @@ class PeakDetectionParameters(KwargsDataclass):
     min_channels: int = 1
     mode: str = "both"  # 'peak', 'trough', 'both'
     min_peak_distance_s: float = 0.001  # seconds
-    cutout_window_around_peak_s: float = 0.0005  # seconds
+    cutout_window_around_peak_s: float = 0.005  # seconds
 
     find_peaks_kwargs: FindPeaksKwargs = field(
         default_factory=lambda: FindPeaksKwargs(height=0.001)
@@ -139,7 +121,7 @@ class FiltersParameters(KwargsDataclass):
     """
 
     filters: list[str] = field(default_factory=lambda: ["savgol"])
-    filter_params: list[object] = field(
+    filter_params: list[KwargsDataclass] = field(
         default_factory=lambda: [SavgolParameters()]
     )
 
@@ -228,7 +210,7 @@ class Params:
 
 # utility to map filter-name → parameter-class
 filter_map = {
-    "savgol": savgol_filter,
+    "savgol": savitzky_golay_filter,
     "bandpass": bandpass_filter,
     "notch": notch_filter,
 }
