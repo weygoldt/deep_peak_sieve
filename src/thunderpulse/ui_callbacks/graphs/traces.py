@@ -22,7 +22,7 @@ from thunderpulse.pulse_detection.config import (
     SavgolParameters,
 )
 from thunderpulse.pulse_detection.detection import apply_filters
-from thunderpulse.utils.cleaning import remove_none_inputs
+# from thunderpulse.utils.cleaning import remove_none_inputs
 from thunderpulse.utils.loggers import get_logger
 
 from . import data_selection as ds
