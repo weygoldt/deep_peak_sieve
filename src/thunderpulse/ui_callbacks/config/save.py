@@ -1,5 +1,7 @@
+import json
 import pathlib
 
+import nixio
 from dash import Dash, Input, Output, ctx
 from IPython import embed
 
@@ -20,7 +22,6 @@ from thunderpulse.utils.check_config import check_config_params
 
 def callbacks(app: Dash) -> None:
     @app.callback(
-        Input("filepath", "data"),
         inputs={
             "general": {
                 "filepath": Input("filepath", "data"),
@@ -78,6 +79,8 @@ def callbacks(app: Dash) -> None:
         resample,
     ) -> dict | None:
         button = ctx.triggered_id == "bt_save_config"
+        if not button:
+            return None
         filepath, save_button = general.values()
         if not filepath:
             return None
@@ -108,9 +111,31 @@ def callbacks(app: Dash) -> None:
         peaks = PeakDetectionParameters(**pulse, find_peaks_kwargs=findpeaks)
         resample = ResampleParameters(**resample)
         params = Params(prefilter, filters, peaks, resample)
+        current_parms = params.to_dict()
 
-        save_path = filepath["savepath"]
-        embed()
-        # nixio.File()
+        save_path = pathlib.Path(filepath["save_path"]) / "config.nix"
+
+        file = nixio.File(str(save_path), nixio.FileMode.Overwrite)
+        sec = file.create_section("general", "thunderpulse.general")
+        # TODO: Fix metatdata cration if it contains None
+        # create_metadata_from_dict(current_parms, sec)
+        file.close()
+
+        with open(save_path.with_suffix(".json"), "w") as f:
+            f.write(params.to_json())
 
 
+def create_metadata_from_dict(d, section: nixio.Section):
+    for key, value in d.items():
+        if isinstance(value, dict):
+            new_sec = section.create_section(key, f"{type(key)}")
+            create_metadata_from_dict(value, new_sec)
+        else:
+            try:
+                section.create_property(key, values_or_dtype=value)
+            except TypeError:
+                if isinstance(value, list):
+                    value = [str(i) for i in value]
+                else:
+                    value = str(value)
+                section.create_property(key, values_or_dtype=value)
