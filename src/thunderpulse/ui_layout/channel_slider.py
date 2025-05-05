@@ -1,8 +1,5 @@
-import nixio
 import numpy as np
-from dash import Input, Output, dcc, html
-
-from thunderpulse import utils
+from dash import dcc, html
 
 
 def create_channel_slider():
@@ -23,5 +20,3 @@ def create_channel_slider():
         ]
     )
     return channel_slider
-
-

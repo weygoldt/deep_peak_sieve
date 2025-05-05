@@ -1,8 +1,10 @@
 from . import (
     calc_umap,
-    graphs,
     channel_slider,
-    config_tabs,
+    config,
+    graphs,
+    keyboard_shortcuts,
+    peak_table,
     save_processing,
     time_slider,
     waveforms,

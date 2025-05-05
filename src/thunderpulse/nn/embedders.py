@@ -1,9 +1,9 @@
 """Base class for all embedder classes."""
 
 from abc import ABC, abstractmethod
-import numpy as np
-from umap import UMAP
+
 import joblib
+import numpy as np
 from sklearn.preprocessing import StandardScaler
 from umap import UMAP
 
@@ -19,7 +19,7 @@ class BaseEmbedder(ABC):
     def fit(self, data: np.ndarray) -> None:
         """Fit the embedder to the data.
 
-        Parameters:
+        Parameters
         ----------
         data: np.ndarray
             1D signals to be embedded.
@@ -30,7 +30,7 @@ class BaseEmbedder(ABC):
     def load(self, model_path: str) -> None:
         """Load the embedder from a file.
 
-        Parameters:
+        Parameters
         ----------
         model_path: str
             Path to load the embedder from.
@@ -41,12 +41,12 @@ class BaseEmbedder(ABC):
     def predict(self, data: np.ndarray) -> list:
         """Embed 1D signals into a latent space.
 
-        Parameters:
+        Parameters
         ----------
         data: np.ndarray
             1D signals to be embedded.
 
-        Returns:
+        Returns
         -------
         np.ndarray
             Embedded signals.
@@ -67,7 +67,7 @@ class UmapEmbedder(BaseEmbedder):
     def fit(self, data: np.ndarray) -> None:
         """Fit the embedder to the data.
 
-        Parameters:
+        Parameters
         ----------
         data: np.ndarray
             1D signals to be embedded.
@@ -84,7 +84,7 @@ class UmapEmbedder(BaseEmbedder):
     def load(self, model_path: str) -> None:
         """Load the embedder from a file.
 
-        Parameters:
+        Parameters
         ----------
         model_path: str
             Path to load the embedder from.
@@ -95,12 +95,12 @@ class UmapEmbedder(BaseEmbedder):
     def predict(self, data: np.ndarray) -> list:
         """Embed 1D signals into a latent space.
 
-        Parameters:
+        Parameters
         ----------
         data: np.ndarray
             1D signals to be embedded.
 
-        Returns:
+        Returns
         -------
         np.ndarray
             Embedded signals.
@@ -123,15 +123,14 @@ class UmapEmbedder(BaseEmbedder):
     def preprocess(self, data: np.ndarray) -> np.ndarray:
         """Z-score the data before embedding.
 
-        Parameters:
+        Parameters
         ----------
         data: np.ndarray
             1D signals to be embedded.
 
-        Returns:
+        Returns
         -------
         np.ndarray
             Preprocessed data.
         """
-
         return super().preprocess(data)

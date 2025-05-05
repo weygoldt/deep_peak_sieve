@@ -21,7 +21,6 @@ def discover_package_modules():
         __file__
     ).parent.parent.parent.parent.name  # get the package name
     package = importlib.import_module(package_name)
-    # print(f"Package name: {package_name}")
     package_path = Path(package.__file__).parent
     modules = []
 
@@ -34,7 +33,7 @@ def discover_package_modules():
 
 
 def configure_logging(
-    verbosity: int, log_to_file: bool = False, log_file="wavetracker.log"
+    verbosity: int, log_to_file: bool = False, log_file="thunderpulse.log"
 ):
     """Configures logging globally, ensuring third-party libraries remain quiet."""
     level = logging.WARNING  # Default level
@@ -51,6 +50,7 @@ def configure_logging(
 
     handlers = [RichHandler()]
 
+    file_handler = None
     if log_to_file:
         file_handler = logging.FileHandler(log_file)
         file_handler.setLevel(level)
@@ -59,6 +59,7 @@ def configure_logging(
                 "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
             )
         )
+    if file_handler:
         handlers.append(file_handler)
 
     # Configure the root logger (keeps third-party libraries quiet)
@@ -73,6 +74,7 @@ def configure_logging(
     # Dynamically discover and set logging level only for the user's package
     for package in discover_package_modules():
         logging.getLogger(package).setLevel(level)
+        # logging.getLogger(package).addHandler(RichHandler())
 
 
 def get_logger(name: str) -> logging.Logger:
@@ -98,3 +100,14 @@ def get_progress():
         TimeRemainingColumn(),  # Estimated time remaining
         expand=True,
     )
+
+
+def main():
+    lg = get_logger(__name__)
+    configure_logging(verbosity=2, log_to_file=True)
+
+    lg.debug("reader ready")
+    lg.info("reader info")
+    lg.warning("reader warning")
+    lg.error("reader error")
+    lg.critical("reader critical")

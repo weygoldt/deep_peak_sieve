@@ -1,3 +1,5 @@
+"""Data loading helpers for ThunderPulse."""
+
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -6,7 +8,6 @@ import nixio
 import numpy as np
 import numpy.typing as npt
 from audioio import AudioLoader
-from IPython import embed
 
 from thunderpulse.utils.loggers import get_logger
 
@@ -59,13 +60,23 @@ class Data:
     paths: Paths
     sensorarray: SensorArray
 
+    def blocks(self, blocksize, overlap):
+        if isinstance(self.data, AudioLoader):
+            return self.data.blocks(blocksize, overlap)
+
+        msg = "Blocked loading implemented for OpenEphysBinaryIO yet."
+        raise NotImplementedError(msg)
+
+
+# TODO: Add functionality to load ephys data also from meta dataset (e.g. folder with many nix files)
+# TODO: Resolve save path with the save paths returned from get_file_list <---------
+
 
 def load_data(
     data_path: Path | str, save_path: Path | str, probe_path: Path | str
 ) -> Data:
-    """Load OpenEphys or WAV data from the specified path."""
+    """Load a single OpenEphys or WAV data recording session from the specified path."""
     data_path = Path(data_path)
-    save_path = Path(save_path)
     probe_path = Path(probe_path)
     wav_files = list(Path(data_path).rglob("*.wav"))
 
@@ -74,27 +85,24 @@ def load_data(
         with Path.open(probe_path) as f:
             seonsory_array = json.load(f)
 
-        file_list, _, dtype = get_file_list(
-            data_path, "wav", make_save_path=False
-        )
-        log.debug(f"File list: {file_list}")
-        if isinstance(file_list[0], list):
-            msg = (
-                "Multiple directories found. Please provide a single "
-                + "directory or file of a single recording session."
-            )
-            raise ValueError(msg)
+        file_list = wav_files
+
         if isinstance(file_list[0], Path):
             file_list = [str(file) for file in file_list]
 
         d = AudioLoader(file_list)
+        d.set_unwrap(thresh=1.5)
+        log.debug("Wav dataset unwrapping enabled")
         ids = np.arange(len(seonsory_array["coordinates"]))
         coordinates = np.array(seonsory_array["coordinates"])
-
         data_c = Data(
             d,
             Metadata(d.rate, d.channels, d.frames / d.rate, d.frames),
-            Paths(data_path, save_path, probe_path),
+            Paths(
+                data_path,
+                save_path,
+                probe_path,
+            ),
             SensorArray(
                 ids,
                 coordinates[:, 0],
@@ -102,6 +110,7 @@ def load_data(
                 coordinates[:, 2],
             ),
         )
+        log.debug("Wav dataset loaded")
     else:
         nix_path = list(data_path.rglob("*.nix"))[0]
         nix_file = nixio.File(str(nix_path), nixio.FileMode.ReadOnly)
@@ -131,6 +140,9 @@ def load_data(
             ),
         )
 
+    log.debug("Data loaded")
+    log.info("Data loaded")
+    log.warning("Data loaded")
     return data_c
 
 
@@ -189,33 +201,3 @@ def get_file_list(
         + "Please provide a valid path."
     )
     raise ValueError(msg)
-
-
-def load_raw_data(path: Path, filetype: str = "wav") -> tuple:
-    """Load audio data from single or multiple files in a directory."""
-    file_list, save_list, dtype = get_file_list(path, filetype)
-    if dtype == "file":
-        return [str(path)], save_list
-    if dtype == "dir":
-        return [str(file) for file in file_list], save_list
-    if dtype == "subdir":
-        data = []
-        savelist = []
-        for subdir, savepaths in zip(file_list, save_list, strict=False):
-            for file, savefile in zip(subdir, savepaths, strict=False):
-                data.append(str(file))
-                savelist.append(savefile)
-        return data, savelist
-    msg = (
-        f"Path {path} is not a valid file or directory. "
-        + "Please provide a valid path."
-    )
-    raise ValueError(msg)
-
-
-def save_numpy(
-    dataset: dict,
-    savepath: Path,
-) -> None:
-    """Save a numpy dataset to disk."""
-    np.savez(savepath, **dataset)

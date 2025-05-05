@@ -114,9 +114,9 @@ def write_nix_file(
     nix_data_array[-last_chunk_index:] = data_chunk
     # print(f"Processing Last Chunk {i} / {chunked_data.shape[0] - 1}")
 
-    assert (
-        nix_data_array.shape == data_array.shape
-    ), "nix data array does not match neo data array"
+    assert nix_data_array.shape == data_array.shape, (
+        "nix data array does not match neo data array"
+    )
 
     nix_file.close()
     return nix_file_path

@@ -6,8 +6,6 @@ from dash import Input, Output
 from plotly import subplots
 from scipy.signal import welch
 
-from thunderpulse import ui_callbacks
-
 from . import channel_selection as cs
 from . import data_selection as ds
 

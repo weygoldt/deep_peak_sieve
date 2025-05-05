@@ -1,7 +1,5 @@
-import nixio
 import numpy as np
 import numpy.typing as npt
-from IPython import embed
 
 from thunderpulse.data_handling.data import SensorArray
 
