@@ -11,7 +11,6 @@ from plotly import subplots
 
 import thunderpulse.ui_callbacks.graphs.channel_selection as cs
 from thunderpulse.data_handling.data import load_data
-from thunderpulse.utils.check_config import check_config_params
 from thunderpulse.pulse_detection.config import (
     BandpassParameters,
     FiltersParameters,
@@ -27,6 +26,7 @@ from thunderpulse.pulse_detection.detection import (
     apply_filters,
     detect_peaks_on_block,
 )
+from thunderpulse.utils.check_config import check_config_params
 
 # from thunderpulse.utils.cleaning import remove_none_inputs
 from thunderpulse.utils.loggers import get_logger
@@ -54,7 +54,7 @@ def default_traces_figure():
 
 def callbacks_traces(app):
     @app.callback(
-        Output("traces", "figure"),
+        [Output("traces", "figure"), Output("peak_storage", "data")],
         # Filter
         inputs={
             "general": {
@@ -124,15 +124,20 @@ def callbacks_traces(app):
             detect_pulses,
         ) = general.values()
         if tabs and tabs != "tab_traces":
-            return default_traces_figure()
+            return default_traces_figure(), None
         if not filepath:
-            return default_traces_figure()
+            return default_traces_figure(), None
         if not filepath["data_path"]:
-            return default_traces_figure()
+            return default_traces_figure(), None
 
         d = load_data(**filepath)
 
-        pre_filter = _check_config(pre_filter)
+        # NOTE: rewrite checkbox input [1]/True []/False to bool
+        pre_filter["common_median_reference"] = bool(
+            pre_filter["common_median_reference"]
+        )
+        prefilter = PrefilterParameters(**pre_filter)
+
         apply_filters_names = []
         apply_filters_params = []
         filter_params_function = [savgol, bandpass, notch]
@@ -141,12 +146,10 @@ def callbacks_traces(app):
         for f_name, f_params, f_params_func in zip(
             filter_names, filter_params, filter_params_function, strict=True
         ):
-            check_f = _check_config(f_params_func)
+            check_f = check_config_params(f_params_func)
             if check_f:
                 apply_filters_params.append(f_params(**f_params_func))
                 apply_filters_names.append(f_name)
-
-        prefilter = PrefilterParameters(**pre_filter)
 
         filters = FiltersParameters(
             filters=apply_filters_names, filter_params=apply_filters_params
@@ -199,6 +202,7 @@ def callbacks_traces(app):
             rows=list(np.arange(channel_length) + 1),
             cols=[1] * channel_length,
         )
+        peaks = None
         if detect_pulses:
             output = detect_peaks_on_block(
                 sliced_data, d.metadata.samplerate, prefilter, params
@@ -220,48 +224,7 @@ def callbacks_traces(app):
                     rows=list(np.arange(channel_length) + 1),
                     cols=[1] * channel_length,
                 )
-        #
-        #     peaks_ = dict(
-        #         index=np.arange(peaks.size),
-        #         spike_index=peaks["spike_index"],
-        #         amplitude=np.round(
-        #             peaks["amplitude"],
-        #             4,
-        #         ),
-        #         channel=peaks["channel"],
-        #     )
-        #     if sw_merged_peaks:
-        #         if not exclude_radius:
-        #             peaks_excluded = np.array([])
-        #         else:
-        #             peaks_without, peaks_excluded = (
-        #                 processing.peak_detection.exclude_peaks_with_distance_traces(
-        #                     peaks, probe_frame, exclude_radius
-        #                 )
-        #             )
-        #
-        #         if peaks_excluded.size > 0:
-        #             fig.add_traces(
-        #                 [
-        #                     go.Scattergl(
-        #                         x=peaks_excluded[
-        #                             peaks_excluded["channel"] == i
-        #                         ]["spike_index"]
-        #                         / d.metadata.samplerate,
-        #                         y=peaks_excluded[
-        #                             peaks_excluded["channel"] == i
-        #                         ]["amplitude"],
-        #                         mode="markers",
-        #                         marker_symbol="arrow",
-        #                         marker_color="blue",
-        #                         marker_size=10,
-        #                         name=f"Peaks {i}",
-        #                     )
-        #                     for i in channels
-        #                 ],
-        #                 rows=list(np.arange(channel_length) + 1),
-        #                 cols=[1] * channel_length,
-        #             )
+            peaks = output
 
         fig.update_layout(
             showlegend=False,
@@ -271,6 +234,4 @@ def callbacks_traces(app):
             margin=dict(l=0, r=0, t=0, b=0),
         )
 
-        return fig
-
-
+        return fig, peaks

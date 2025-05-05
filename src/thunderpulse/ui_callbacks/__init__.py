@@ -4,6 +4,7 @@ from . import (
     config,
     graphs,
     keyboard_shortcuts,
+    peak_table,
     save_processing,
     time_slider,
     waveforms,
