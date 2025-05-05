@@ -32,10 +32,9 @@ def main(
     channel_slider = ui_layout.channel_slider.create_channel_slider()
     time_slider = ui_layout.time_slider.create_time_slider()
     layout_graph_probe = ui_layout.probe_graph.create_layout_probe_graph()
-    visualization_tabs = (
-        ui_layout.visualization_tabs.create_visualization_tabs()
-    )
+    visualization_tabs = ui_layout.graphs.create_visualization_tabs()
     config_tabs = ui_layout.config.combine.create_config()
+    peak_table = ui_layout.peak_table.create_peak_table_card()
 
     app.layout = dbc.Container(
         [
@@ -46,6 +45,7 @@ def main(
                     dbc.Col(
                         [
                             config_tabs,
+                            peak_table,
                             layout_graph_probe,
                             dbc.Spinner(
                                 dcc.Store(id="filepath"),
@@ -71,7 +71,7 @@ def main(
                                     visualization_tabs,
                                     # dcc.Store(id="store_umap_selection"),
                                     time_slider,
-                                    # dcc.Store(id="peak_storage"),
+                                    dcc.Store(id="peak_storage"),
                                     html.Br(),
                                 ],
                             ),
@@ -101,7 +101,7 @@ def main(
     ui_callbacks.graphs.probe.callbacks_sensory_array(app)
     ui_callbacks.keyboard_shortcuts.create_shortcuts(app)
 
-    # tables.peak_table_window.callbacks_peak_table_window(app)
+    ui_callbacks.peak_table.callbacks(app)
 
     app.run(debug=True)
 
