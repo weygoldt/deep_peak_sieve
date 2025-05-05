@@ -1,7 +1,9 @@
 import numpy as np
 from dash import Input, Output
+from IPython import embed
 
 from thunderpulse.data_handling.data import load_data
+from thunderpulse.ui_callbacks.graphs.channel_selection import select_channels
 
 
 def callbacks(app):
@@ -48,15 +50,16 @@ def callbacks(app):
         d = load_data(**filepaths)
 
         sorted_sensoryarray_y = np.argsort(d.sensorarray.y)
-        channels = []
-        for items in selected_data["points"]:
+
+        channels = np.zeros(len(selected_data["points"]), dtype=np.int32)
+        for i, items in enumerate(selected_data["points"]):
             channel_id = items["text"].split(" ")[-1]
-            channels.append(int(channel_id))
+            channels[i] = int(channel_id)
 
         order = {key: i for i, key in enumerate(sorted_sensoryarray_y)}
         channels = np.array(sorted(channels, key=lambda d: order[d]))
+        channel_index = np.zeros_like(channels)
+        for i, ch in enumerate(channels):
+            channel_index[i] = np.where(ch == sorted_sensoryarray_y)[0][0]
 
-        start_channel = np.where(channels[0] == sorted_sensoryarray_y)[0]
-        stop_channel = np.where(channels[-1] == sorted_sensoryarray_y)[0]
-        channels = np.arange(start_channel.item(), stop_channel.item() + 1)
-        return channels
+        return np.sort(channel_index)

@@ -1,6 +1,7 @@
 import numpy as np
 import plotly.graph_objects as go
 from dash import Input, Output, Patch
+from IPython import embed
 
 from thunderpulse.data_handling.data import load_data
 
@@ -34,17 +35,14 @@ def callbacks_sensory_array(app):
             return default_sensory_array_figure()
 
         d = load_data(**filepaths)
-
-        # nix_file = nixio.File(filepaths["data_path"], nixio.FileMode.ReadOnly)
-        # probe_frame = nix_file.blocks[0].data_frames["probe_frame"]
         sorted_sensoryarray_y = np.argsort(d.sensorarray.y)
 
         if np.array(channels).size > 2:
             patched_figure = Patch()
             colors = np.array(["blue"] * d.sensorarray.ids.shape[0])
-            colors[
-                sorted_sensoryarray_y[np.arange(channels[0], channels[-1] + 1)]
-            ] = "red"
+
+            colors[sorted_sensoryarray_y[channels]] = "red"
+
             patched_figure["data"][0]["marker"]["color"] = colors.tolist()
 
             return patched_figure
@@ -59,9 +57,15 @@ def callbacks_sensory_array(app):
             np.max(d.sensorarray.y) + padding,
         ]
         colors = np.array(["blue"] * len(d.sensorarray.ids))
-        colors[
-            sorted_sensoryarray_y[np.arange(channels[0], channels[1] + 1)]
-        ] = "red"
+
+        if np.array(channels).size == 2:
+            print(channels)
+            colors[
+                sorted_sensoryarray_y[np.arange(channels[0], channels[1] + 1)]
+            ] = "red"
+        else:
+            colors[sorted_sensoryarray_y[channels[0]]] = "red"
+
         fig = go.Figure(
             data=go.Scattergl(
                 x=d.sensorarray.x,
