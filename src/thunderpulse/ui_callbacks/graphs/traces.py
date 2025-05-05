@@ -9,7 +9,6 @@ from IPython import embed
 from IPython.core.interactiveshell import is_integer_string
 from plotly import subplots
 
-import thunderpulse.ui_callbacks.graphs.channel_selection as cs
 from thunderpulse.data_handling.data import load_data
 from thunderpulse.pulse_detection.config import (
     BandpassParameters,
@@ -26,6 +25,7 @@ from thunderpulse.pulse_detection.detection import (
     apply_filters,
     detect_peaks_on_block,
 )
+from thunderpulse.ui_callbacks.graphs.channel_selection import select_channels
 from thunderpulse.utils.check_config import check_config_params
 
 # from thunderpulse.utils.cleaning import remove_none_inputs
@@ -165,7 +165,7 @@ def callbacks_traces(app):
         log.info(f"Loading data into dashboard: {filepath}")
 
         time_display = 1
-        channels, channel_length = cs.select_channels(
+        channels, channel_length = select_channels(
             channels,
             probe_selected_channels,
             d.sensorarray,
