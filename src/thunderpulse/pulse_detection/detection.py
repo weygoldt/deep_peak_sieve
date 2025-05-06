@@ -473,7 +473,9 @@ def process_dataset(
 
     # Open NIX file
     nix_file = nixio.File.open(str(output_path), nixio.FileMode.Overwrite)
-    block = nix_file.create_block(name="pulses", type_="ThunderPulse.pulses")
+    nix_block = nix_file.create_block(
+        name="pulses", type_="ThunderPulse.pulses"
+    )
 
     num_blocks = int(np.ceil(data.metadata.frames / (blocksize - overlap)))
     # with get_progress() as pbar:
@@ -489,12 +491,14 @@ def process_dataset(
         }
 
         # reshape to match (n_channels, n_samples)
-        if len(block.shape) == 1:
-            block = np.expand_dims(block, axis=1)
-        if block.shape[0] != data.metadata.channels:
-            block = np.transpose(block)
+        # if len(block.shape) == 1:
+        #     block = np.expand_dims(block, axis=1)
+        # if block.shape[0] != data.metadata.channels:
+        #     block = np.transpose(block)
 
-        block_peaks = detect_peaks_on_block(block, rate, params)
+        block_peaks = detect_peaks_on_block(
+            block, rate, params.prefitering, params
+        )
 
         if block_peaks is None:
             log.info("Skipping block due to no peaks found")
@@ -503,19 +507,31 @@ def process_dataset(
         block_peaks = post_process_peaks_per_block(
             block_peaks, params, blockinfo
         )
-
         if blockiterval == 0:
-            pass
             # Initialize dataset
+            for key, value in block_peaks.items():
+                data_array = nix_block.create_data_array(
+                    key, f"thunderpulse.{key}", data=value
+                )
+                print(f"Created Data array {data_array.name}")
 
         else:
-            pass
-            # Append to dataset
+            for key, value in block_peaks.items():
+                try:
+                    data_array = nix_block.data_arrays[key]
+                    data_array.append(value)
+                except IndexError:
+                    data_array = nix_block.create_data_array(
+                        key, f"thunderpulse.{key}", data=value
+                    )
+                    print(f"Created Data array {data_array.name}")
 
         # pbar.update(task, advance=1)
 
-        # TODO: Here Nix file saving instead of Numpy
         gc.collect()  # TODO: Check if this has actually an effect
+    embed()
+    exit()
+    nix_file.close()
 
 
 @app.command()
@@ -548,6 +564,7 @@ def main(
 
     sensor_layout_path = datapath / "electrode_layout.json"
     config_path = datapath / "config.json"
+    # TODO: add probe path
 
     if not config_path.exists():
         msg = f"No config file found at {config_path}. Please provide a config file."
@@ -568,7 +585,7 @@ def main(
             log.info(f"File {outfile_path} already exists, skipping.")
             continue
         try:
-            data = load_data(recording_path, sensor_layout_path)
+            data = load_data(recording_path, savepath, sensor_layout_path)
         except Exception as e:
             log.error(f"Failed to load {recording_path}: {e}")
             continue
