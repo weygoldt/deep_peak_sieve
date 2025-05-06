@@ -138,8 +138,8 @@ def detect_peaks(
         else:
             peak_params = {}
 
-        neg_peaks = np.zeros(0, dtype=int)
-        pos_peaks = np.zeros(0, dtype=int)
+        neg_peaks = np.zeros(0, dtype=np.int64)
+        pos_peaks = np.zeros(0, dtype=np.int64)
 
         if mode in {"peak", "both"}:
             pos_peaks, _ = find_peaks(signal, **peak_params)
@@ -474,7 +474,7 @@ def process_dataset(
     # Open NIX file
     nix_file = nixio.File.open(str(output_path), nixio.FileMode.Overwrite)
     nix_block = nix_file.create_block(
-        name="pulses", type_="ThunderPulse.pulses"
+        name="pulses.nix", type_="ThunderPulse.pulses"
     )
 
     num_blocks = int(np.ceil(data.metadata.frames / (blocksize - overlap)))
@@ -489,12 +489,6 @@ def process_dataset(
             "blocksize": blocksize,
             "overlap": overlap,
         }
-
-        # reshape to match (n_channels, n_samples)
-        # if len(block.shape) == 1:
-        #     block = np.expand_dims(block, axis=1)
-        # if block.shape[0] != data.metadata.channels:
-        #     block = np.transpose(block)
 
         block_peaks = detect_peaks_on_block(
             block, rate, params.prefitering, params
@@ -529,8 +523,6 @@ def process_dataset(
         # pbar.update(task, advance=1)
 
         gc.collect()  # TODO: Check if this has actually an effect
-    embed()
-    exit()
     nix_file.close()
 
 
