@@ -288,6 +288,7 @@ def compute_mean_peak(
 def detect_peaks_on_block(
     input_data: np.ndarray,
     rate: float,
+    blockinfo: dict,
     prefilter: PrefilterParameters,
     params: Params,
 ) -> dict | None:
@@ -390,9 +391,9 @@ def detect_peaks_on_block(
         bool_channels = np.zeros(n_channels, dtype=bool)
         bool_channels[chans] = True
 
-        # center = center + blockinfo["blockiterval"] * (
-        #     blockinfo["blocksize"] - blockinfo["overlap"]
-        # )
+        center = center + blockinfo["blockiterval"] * (
+            blockinfo["blocksize"] - blockinfo["overlap"]
+        )
 
         start_stop_index = [
             center - cutout_window_around_peak,
@@ -497,7 +498,11 @@ def process_dataset(
         #     block = np.transpose(block)
 
         block_peaks = detect_peaks_on_block(
-            block, rate, params.prefitering, params
+            block,
+            rate,
+            blockinfo,
+            params.prefitering,
+            params,
         )
 
         if block_peaks is None:
@@ -529,8 +534,6 @@ def process_dataset(
         # pbar.update(task, advance=1)
 
         gc.collect()  # TODO: Check if this has actually an effect
-    embed()
-    exit()
     nix_file.close()
 
 
