@@ -208,23 +208,22 @@ def callbacks_traces(app):
                 sliced_data, d.metadata.samplerate, prefilter, params
             )
             if output:
-                fig.add_traces(
-                    [
+                for i, ch in enumerate(channels, start=1):
+                    channel_peaks = output["centers"][output["channels"][:, ch]]
+                    fig.add_trace(
                         go.Scattergl(
-                            x=output["centers"] / d.metadata.samplerate
+                            x=channel_peaks / d.metadata.samplerate
                             + time_slice[0],
-                            y=sliced_data[output["centers"], ch],
+                            y=sliced_data[channel_peaks, ch],
                             mode="markers",
                             marker_symbol="arrow",
                             marker_color="red",
                             marker_size=10,
                             name=f"Peaks {ch}",
-                        )
-                        for ch in channels
-                    ],
-                    rows=list(np.arange(channel_length) + 1),
-                    cols=[1] * channel_length,
-                )
+                        ),
+                        row=i,
+                        col=[1] * channel_length,
+                    )
             peaks = output
 
         fig.update_layout(
