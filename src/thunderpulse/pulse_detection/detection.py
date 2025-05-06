@@ -376,7 +376,7 @@ def detect_peaks_on_block(
     )
 
     output_data = {
-        "peaks": peak_array,
+        "pulses": peak_array,
         "channels": channels_array,
         "centers": centers_array,
         "start_stop_index": start_stop_index,
@@ -408,7 +408,7 @@ def detect_peaks_on_block(
 
         peak_counter += 1
 
-        output_data["peaks"][peak_counter - 1, :] = p
+        output_data["pulses"][peak_counter - 1, :] = p
         output_data["channels"][peak_counter - 1, :] = bool_channels
         output_data["centers"][peak_counter - 1] = center
         output_data["start_stop_index"][peak_counter - 1] = start_stop_index
@@ -419,9 +419,9 @@ def detect_peaks_on_block(
 def post_process_peaks_per_block(
     peaks: dict, params: Params, blockinfo: dict
 ) -> dict:
-    n_peaks = peaks["peaks"].shape[0]
-    n_channels = peaks["peaks"].shape[1]
-    n_samples = peaks["peaks"].shape[2]
+    n_peaks = peaks["pulses"].shape[0]
+    n_channels = peaks["pulses"].shape[1]
+    n_samples = peaks["pulses"].shape[2]
 
     # Interpolate raw peak snippets
     if params.resample.enabled:
@@ -430,32 +430,32 @@ def post_process_peaks_per_block(
         new_peaks = np.full(
             shape=new_shape,
             fill_value=np.nan,
-            dtype=peaks["peaks"].dtype,
+            dtype=peaks["pulses"].dtype,
         )
 
         for i in range(n_peaks):
             for ch in range(n_channels):
                 x = np.linspace(0, n_samples, n_samples)
                 xnew = np.linspace(0, n_samples, params.resample.n_resamples)
-                f = interp1d(x, peaks["peaks"][i, ch], kind="cubic")
+                f = interp1d(x, peaks["pulses"][i, ch], kind="cubic")
                 new_peaks[i, ch] = f(xnew)
 
-        peaks["peaks"] = new_peaks
+        peaks["pulses"] = new_peaks
         n_samples = params.resample.n_resamples
 
     # Compute mean peaks
-    peaks["mean_peaks"] = np.full(
+    peaks["mean_pulses"] = np.full(
         shape=(n_peaks, n_samples),
         fill_value=np.nan,
-        dtype=peaks["peaks"].dtype,
+        dtype=peaks["pulses"].dtype,
     )
-    log.debug("Computing mean peaks")
-    for i in range(len(peaks["peaks"])):
+    log.debug("Computing mean pulses")
+    for i in range(len(peaks["pulses"])):
         mean_peak = compute_mean_peak(
-            peaks["peaks"][i],
+            peaks["pulses"][i],
             peaks["channels"][i],
         )
-        peaks["mean_peaks"][i] = mean_peak
+        peaks["mean_pulses"][i] = mean_peak
 
     return peaks
 
