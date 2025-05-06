@@ -1,6 +1,7 @@
 import polars as pl
 from dash import Input, Output
 from IPython import embed
+import numpy as np
 
 
 def callbacks(app):
@@ -17,8 +18,22 @@ def callbacks(app):
         if not peaks_storage:
             return None, None, None
 
+        peaks_storage.pop("peaks")
+        peaks_storage.pop("channels")
+
+        starts = np.array(peaks_storage["start_stop_index"])[:, 0]
+        stops = np.array(peaks_storage["start_stop_index"])[:, 1]
+
+        peaks_storage["start"] = starts
+        peaks_storage["stop"] = stops
+        peaks_storage.pop("start_stop_index")
+
+        print(peaks_storage.keys())
+
         dataframe = pl.DataFrame(peaks_storage)
         data_frame_size = dataframe.shape[0]
+
+        print(dataframe.columns)
 
         if len(sort_by):
             dataframe = dataframe.sort(

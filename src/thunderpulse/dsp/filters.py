@@ -19,7 +19,7 @@ def savitzky_golay_filter(data, fs, window_length_s, polyorder):
         data,
         window_length=window_length,
         polyorder=polyorder,
-        axis=-1,
+        axis=0,
     )
 
 
