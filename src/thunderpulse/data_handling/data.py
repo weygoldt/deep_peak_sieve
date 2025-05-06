@@ -8,6 +8,7 @@ import nixio
 import numpy as np
 import numpy.typing as npt
 from audioio import AudioLoader
+from audioio.bufferedarray import blocks
 
 from thunderpulse.utils.loggers import get_logger
 
@@ -63,6 +64,12 @@ class Data:
     def blocks(self, blocksize, overlap):
         if isinstance(self.data, AudioLoader):
             return self.data.blocks(blocksize, overlap)
+        if isinstance(self.data, nixio.DataArray):
+            return blocks(
+                self.data,
+                blocksize,
+                overlap,
+            )
 
         msg = "Blocked loading implemented for OpenEphysBinaryIO yet."
         raise NotImplementedError(msg)
