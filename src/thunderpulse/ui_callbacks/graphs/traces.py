@@ -211,7 +211,8 @@ def callbacks_traces(app):
                 fig.add_traces(
                     [
                         go.Scattergl(
-                            x=output["centers"] / d.metadata.samplerate,
+                            x=output["centers"] / d.metadata.samplerate
+                            + time_slice[0],
                             y=sliced_data[output["centers"], ch],
                             mode="markers",
                             marker_symbol="arrow",
