@@ -9,6 +9,7 @@ from typing import Any
 
 import numpy as np
 
+from thunderpulse.data_handling.data import SensorArray
 from thunderpulse.dsp.filters import (
     bandpass_filter,
     notch_filter,
@@ -134,6 +135,7 @@ class FiltersParameters(KwargsDataclass):
 class ResampleParameters(KwargsDataclass):
     """Zero-hold / FFT resampling settings."""
 
+    centering: bool = True
     enabled: bool = True
     n_resamples: int = 512
 
@@ -163,6 +165,7 @@ class Params:
     )
     resample: ResampleParameters = field(default_factory=ResampleParameters)
     buffersize_s: float = 60.0  # seconds
+    sensoryarray: SensorArray = field(default_factory=SensorArray)
 
     # ── (de)serialisation helpers ──────────────────────────────────────
     def to_dict(self) -> dict:
