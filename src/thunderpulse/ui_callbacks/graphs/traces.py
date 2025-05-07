@@ -204,8 +204,17 @@ def callbacks_traces(app):
         )
         peaks = None
         if detect_pulses:
+            blockinfo = {
+                "blockiterval": 0,
+                "blocksize": int(time_display * d.metadata.samplerate),
+                "overlap": 0,
+            }
             output = detect_peaks_on_block(
-                sliced_data, d.metadata.samplerate, prefilter, params
+                sliced_data,
+                d.metadata.samplerate,
+                blockinfo,
+                prefilter,
+                params,
             )
             if output:
                 for i, ch in enumerate(channels, start=1):

@@ -72,9 +72,7 @@ class UmapEmbedder(BaseEmbedder):
         data: np.ndarray
             1D signals to be embedded.
         """
-        reshaped_data = data.reshape(data.shape[0], -1)
-        scaled_data = self.scaler.fit_transform(reshaped_data)
-        data = scaled_data.reshape(data.shape[0], data.shape[1], data.shape[2])
+        scaled_data = self.scaler.fit_transform(data)
         self.model.fit(data)
 
         # save model and scaler
@@ -111,26 +109,3 @@ class UmapEmbedder(BaseEmbedder):
         if not np.all(np.isfinite(data)):
             raise ValueError("Data contains NaN or infinite values.")
         return self.model.transform(data)
-
-
-class UmapEmbedder(BaseEmbedder):
-    """UMAP embedder for 1D signals."""
-
-    def __init__(self, model_name: str, model_path: str) -> None:
-        super().__init__(model_name, model_path)
-        self.model = UMAP()
-
-    def preprocess(self, data: np.ndarray) -> np.ndarray:
-        """Z-score the data before embedding.
-
-        Parameters
-        ----------
-        data: np.ndarray
-            1D signals to be embedded.
-
-        Returns
-        -------
-        np.ndarray
-            Preprocessed data.
-        """
-        return super().preprocess(data)
