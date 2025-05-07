@@ -1,5 +1,6 @@
 """Main loop to parse large datasets and collect pulses."""
 
+import sys
 import gc
 from datetime import timedelta
 from pathlib import Path
@@ -382,7 +383,8 @@ def detect_peaks_on_block(
         "start_stop_index": start_stop_index,
     }
 
-    log.warning("Detecting new Peaks")
+    log.info("Cutting out peaks")
+
     for _, (pks, chans, center) in enumerate(
         zip(grouped_peaks, grouped_channels, centers, strict=False)
     ):
@@ -391,22 +393,34 @@ def detect_peaks_on_block(
         bool_channels = np.zeros(n_channels, dtype=bool)
         bool_channels[chans] = True
 
-        center = center + blockinfo["blockiterval"] * (
-            blockinfo["blocksize"] - blockinfo["overlap"]
-        )
-
         start_stop_index = [
             center - cutout_window_around_peak,
             center + cutout_window_around_peak,
         ]
-        if start_stop_index[0] < 0:
+
+        if (start_stop_index[0] < 0) or (
+            start_stop_index[1] > input_data.shape[0]
+        ):
+            log.warning("Peak is too close to recording borders, skipping.")
             continue
 
         p = input_data[start_stop_index[0] : start_stop_index[1], :].T
         if p.shape[1] != cutout_window_around_peak * 2:
+            log.critical("This is not supposed to happen")
             continue
 
         peak_counter += 1
+
+        # Correct to global time, not just block time
+        center = center + blockinfo["blockiterval"] * (
+            blockinfo["blocksize"] - blockinfo["overlap"]
+        )
+
+        # Same for start/stop indices
+        start_stop_index = [
+            center - cutout_window_around_peak,
+            center + cutout_window_around_peak,
+        ]
 
         output_data["pulses"][peak_counter - 1, :] = p
         output_data["channels"][peak_counter - 1, :] = bool_channels
@@ -583,7 +597,7 @@ def main(
     for recording_path in subdirs:
         outfile_dir = savepath / recording_path.name
         outfile_dir.mkdir(parents=True, exist_ok=True)
-        outfile_path = outfile_dir / "pulses.nix"
+        outfile_path = outfile_dir / "pulses.h5"
         if outfile_path.exists() and not overwrite:
             log.info(f"File {outfile_path} already exists, skipping.")
             continue

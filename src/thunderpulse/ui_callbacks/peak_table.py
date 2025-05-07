@@ -18,7 +18,7 @@ def callbacks(app):
         if not peaks_storage:
             return None, None, None
 
-        peaks_storage.pop("peaks")
+        peaks_storage.pop("pulses")
         peaks_storage.pop("channels")
 
         starts = np.array(peaks_storage["start_stop_index"])[:, 0]

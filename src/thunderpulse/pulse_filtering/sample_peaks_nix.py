@@ -152,7 +152,7 @@ def main(
 ):
     configure_logging(verbose)
     data, _, dtype = get_file_list(
-        path=path, filetype="nix", make_save_path=False
+        path=path, filetype="h5", make_save_path=False
     )
 
     # check if data is nested list
@@ -213,7 +213,7 @@ def main(
         sys.exit()
 
     for i in range(len(sample_indices)):
-        indices = np.sort(sample_indices[i])
+        indices = sample_indices[i]
         file = data[i]
         n = len(indices)
         files = [file] * n
@@ -226,7 +226,17 @@ def main(
                 block = f.blocks[0]
                 for arr in block.data_arrays:
                     name = arr.name
-                    vals = arr[indices]
+
+                    # TODO: This is super ugly but I did not find another working way
+                    if len(arr.shape) == 1:
+                        vals = arr[indices]
+                    elif len(arr.shape) == 2:
+                        vals = arr[indices, :]
+                    elif len(arr.shape) == 3:
+                        vals = arr[indices, :, :]
+                    else:
+                        msg = f"Array has unexpected shape: {arr.shape}"
+                        raise ValueError(msg)
 
                     print(f"Array name: {name}")
                     print(f"Array shape: {vals.shape}")
