@@ -4,7 +4,7 @@ import sys
 import gc
 from datetime import timedelta
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Iterable
 
 import humanize
 import matplotlib.pyplot as plt
@@ -98,6 +98,7 @@ def apply_filters(
 
 def detect_peaks(
     block: np.ndarray,
+    rate: float,
     mode: str = "both",
     find_peaks_kwargs: FindPeaksKwargs | None = None,
 ) -> tuple[list[np.ndarray], list[np.ndarray]]:
@@ -131,12 +132,34 @@ def detect_peaks(
     peaks_list = []
     channels_list = []
 
+    if find_peaks_kwargs:
+        peak_params = find_peaks_kwargs.to_kwargs(keep_none=True)
+    else:
+        peak_params = {}
+
+    # Convert parameters from seconds to samples
+    for key, value in peak_params.items():
+        # Select only the parameters that are x-axis related
+        if not key in ["width", "distance"]:
+            continue
+        if isinstance(value, Iterable) and not isinstance(value, str):
+            peak_params[key] = [x / rate for x in value]
+        elif isinstance(value, (int | float)):
+            peak_params[key] = value * rate
+        elif value is None:
+            pass
+        else:
+            msg = (
+                "Peak parameters must be either a list of numbers or a "
+                f"single number. Got {type(value)} for key {key}."
+            )
+            raise TypeError(msg)
+
+        print(f"Peak parameter {key}: {peak_params[key]}")
+
+    # Detect peaks on each channel
     for ch in range(block.shape[1]):
         signal = block[:, ch]
-        if find_peaks_kwargs:
-            peak_params = find_peaks_kwargs.to_kwargs(keep_none=True)
-        else:
-            peak_params = {}
 
         peaks = np.zeros(0, dtype=np.int32)
         if mode == "peak":
@@ -299,6 +322,7 @@ def detect_peaks_on_block(
     # Detect peaks on each channel
     peaks_list, channels_list = detect_peaks(
         block_filtered,
+        rate=rate,
         mode=params.peaks.mode,
         find_peaks_kwargs=params.peaks.find_peaks_kwargs,
     )
