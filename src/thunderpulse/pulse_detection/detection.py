@@ -138,20 +138,20 @@ def detect_peaks(
         else:
             peak_params = {}
 
-        neg_peaks = np.zeros(0, dtype=np.int64)
-        pos_peaks = np.zeros(0, dtype=np.int64)
-
-        if mode in {"peak", "both"}:
-            pos_peaks, _ = find_peaks(signal, **peak_params)
-        if mode in {"trough", "both"}:
-            neg_peaks, _ = find_peaks(-signal, **peak_params)
+        peaks = np.zeros(0, dtype=np.int32)
+        if mode == "peak":
+            peaks, _ = find_peaks(signal, **peak_params)
+        if mode == "trough":
+            peaks, _ = find_peaks(-signal, **peak_params)
+        if mode == "both":
+            peaks, _ = find_peaks(np.abs(signal), **peak_params)
 
         # concatenate & sort to preserve chronological order
-        peaks_ch = np.sort(np.concatenate((pos_peaks, neg_peaks)))
-        peaks_list.append(peaks_ch)
+        peaks = np.sort(peaks)
+        peaks_list.append(peaks)
 
         # build matching channel-id array
-        channels_list.append(np.full_like(peaks_ch, ch, dtype=np.int32))
+        channels_list.append(np.full_like(peaks, ch, dtype=np.int32))
 
     return peaks_list, channels_list
 
