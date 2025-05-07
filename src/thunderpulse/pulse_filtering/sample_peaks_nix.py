@@ -12,6 +12,7 @@ from humanize.number import intword
 from rich.prompt import Confirm
 from IPython import embed
 
+from thunderpulse.nn.embedders import UmapEmbedder
 from thunderpulse.data_handling.data import get_file_list
 from thunderpulse.utils.loggers import (
     configure_logging,
@@ -159,7 +160,7 @@ def main(
     if isinstance(data[0], list):
         data = [item for sublist in data for item in sublist]
 
-    log.warning(f"Found {len(data)} files in the dataset.")
+    log.info(f"Found {len(data)} files in the dataset.")
 
     sampler = StratifiedRandomSampler(data, num_samples=num_samples)
 
@@ -222,7 +223,8 @@ def main(
         if Path(file).suffix in [".nix", ".h5"]:
             with nixio.File.open(str(file), nixio.FileMode.ReadOnly) as f:
                 if not check_nixfile(f, file):
-                    continue
+                    msg = f"File {file} is not a valid NIX file. Exiting."
+                    raise ValueError(msg)
                 block = f.blocks[0]
                 for arr in block.data_arrays:
                     name = arr.name
@@ -238,9 +240,6 @@ def main(
                         msg = f"Array has unexpected shape: {arr.shape}"
                         raise ValueError(msg)
 
-                    print(f"Array name: {name}")
-                    print(f"Array shape: {vals.shape}")
-
                     if i == 0:
                         data_array = sample_block.create_data_array(
                             name, "samples", data=vals
@@ -255,4 +254,24 @@ def main(
             )
             continue
         gc.collect()
+
+    # Close the file for now
     sample_file.close()
+
+    # Fit the umap to the sampled data
+    dataset = nixio.File.open(
+        str(outfile),
+        nixio.FileMode.ReadWrite,
+    )
+
+    modelpath = outfile.parent
+    pulses = dataset.blocks[0].data_arrays["mean_pulses"][:]
+    embedder = UmapEmbedder("umap", str(modelpath / "umap.joblib"))
+    embedder.fit(pulses)
+    yhat = embedder.predict(pulses)
+
+    block = dataset.blocks[0]
+    data_array = block.create_data_array(
+        "umap_embedding", "embedding", data=yhat
+    )
+    dataset.close()

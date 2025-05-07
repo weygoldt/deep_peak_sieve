@@ -63,6 +63,8 @@ class UmapEmbedder(BaseEmbedder):
         self.scaler = StandardScaler()
         self.model_path = model_path
         self.scaler_path = model_path.replace(".joblib", "_scaler.joblib")
+        self.scaler_fitted = False
+        self.model_fitted = False
 
     def fit(self, data: np.ndarray) -> None:
         """Fit the embedder to the data.
@@ -74,6 +76,8 @@ class UmapEmbedder(BaseEmbedder):
         """
         scaled_data = self.scaler.fit_transform(data)
         self.model.fit(data)
+        self.model_fitted = True
+        self.scaler_fitted = True
 
         # save model and scaler
         joblib.dump(self.model, self.model_path)
@@ -89,6 +93,8 @@ class UmapEmbedder(BaseEmbedder):
         """
         self.model = joblib.load(model_path)
         self.scaler = joblib.load(self.scaler_path)
+        self.model_fitted = True
+        self.scaler_fitted = True
 
     def predict(self, data: np.ndarray) -> list:
         """Embed 1D signals into a latent space.
@@ -103,9 +109,17 @@ class UmapEmbedder(BaseEmbedder):
         np.ndarray
             Embedded signals.
         """
-        reshaped_data = data.reshape(data.shape[0], -1)
-        scaled_data = self.scaler.transform(reshaped_data)
-        data = scaled_data.reshape(data.shape[0], data.shape[1], data.shape[2])
-        if not np.all(np.isfinite(data)):
-            raise ValueError("Data contains NaN or infinite values.")
-        return self.model.transform(data)
+        if not self.model_fitted:
+            msg = (
+                f"Model not fitted yet. Please fit the model or load it first. "
+                f"Model path: {self.model_path}"
+            )
+            raise RuntimeError(msg)
+        if not self.scaler_fitted:
+            msg = (
+                f"Scaler not fitted yet. Please fit the scaler or load it first. "
+                f"Scaler path: {self.scaler_path}"
+            )
+            raise RuntimeError(msg)
+        scaled_data = self.scaler.transform(data)
+        return self.model.transform(scaled_data)
