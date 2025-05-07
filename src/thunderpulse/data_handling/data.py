@@ -1,7 +1,7 @@
 """Data loading helpers for ThunderPulse."""
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import nixio
@@ -34,7 +34,7 @@ class Paths:
     layout_path: str | Path
 
 
-@dataclass
+@dataclass(slots=True)
 class SensorArray:
     """Representation of the sensor array.
 
@@ -46,10 +46,18 @@ class SensorArray:
     z : z-positions
     """
 
-    ids: npt.NDArray[np.int16]
-    x: npt.NDArray[np.float32]
-    y: npt.NDArray[np.float32]
-    z: npt.NDArray[np.float32]
+    ids: npt.NDArray[np.int16] = field(
+        default_factory=lambda: np.arange(15, dtype=np.int16)
+    )
+    x: npt.NDArray[np.float32] = field(
+        default_factory=lambda: np.arange(15, dtype=np.float32)
+    )
+    y: npt.NDArray[np.float32] = field(
+        default_factory=lambda: np.arange(15, dtype=np.float32)
+    )
+    z: npt.NDArray[np.float32] = field(
+        default_factory=lambda: np.arange(15, dtype=np.float32)
+    )
 
 
 @dataclass
@@ -59,7 +67,7 @@ class Data:
     data: AudioLoader | nixio.DataArray
     metadata: Metadata
     paths: Paths
-    sensorarray: SensorArray
+    sensorarray: SensorArray = field(default_factory=SensorArray)
 
     def blocks(self, blocksize, overlap):
         if isinstance(self.data, AudioLoader):
