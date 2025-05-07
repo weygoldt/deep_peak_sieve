@@ -59,7 +59,6 @@ def callbacks_sensory_array(app):
         colors = np.array(["blue"] * len(d.sensorarray.ids))
 
         if np.array(channels).size == 2:
-            print(channels)
             colors[
                 sorted_sensoryarray_y[np.arange(channels[0], channels[1] + 1)]
             ] = "red"

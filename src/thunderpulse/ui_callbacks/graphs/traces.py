@@ -96,6 +96,7 @@ def callbacks_traces(app):
             },
             "resample": {
                 "enabled": Input("sw_resampling_enable", "value"),
+                "centering": Input("sw_resampling_centering", "value"),
                 "n_resamples": Input("num_resampling_n", "value"),
             },
         },
@@ -153,7 +154,9 @@ def callbacks_traces(app):
         findpeaks = FindPeaksKwargs(**findpeaks)
         peaks = PeakDetectionParameters(**pulse, find_peaks_kwargs=findpeaks)
         resample = ResampleParameters(**resample)
-        params = Params(prefilter, filters, peaks, resample)
+        params = Params(
+            prefilter, filters, peaks, resample, sensoryarray=d.sensorarray
+        )
 
         channels = np.array(channels)
 
@@ -213,6 +216,27 @@ def callbacks_traces(app):
                     channel_peaks = output["centers"][
                         output["channels"][:, ch]
                     ]
+                    all_channels_index = np.where(
+                        np.concatenate(output["all_channels"]) == ch
+                    )
+                    all_pulses = np.concatenate(output["all_pulses"])[
+                        all_channels_index
+                    ]
+                    fig.add_trace(
+                        go.Scattergl(
+                            x=all_pulses / d.metadata.samplerate
+                            + time_slice[0],
+                            y=sliced_data[all_pulses, ch],
+                            mode="markers",
+                            marker_symbol="arrow",
+                            marker_color="blue",
+                            marker_size=10,
+                            name=f"Peaks {ch}",
+                        ),
+                        row=i,
+                        col=[1] * channel_length,
+                    )
+
                     fig.add_trace(
                         go.Scattergl(
                             x=channel_peaks / d.metadata.samplerate
