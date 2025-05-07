@@ -214,7 +214,7 @@ def main(
         sys.exit()
 
     for i in range(len(sample_indices)):
-        indices = sample_indices[i]
+        indices = np.sort(sample_indices[i])
         file = data[i]
         n = len(indices)
         files = [file] * n
@@ -228,14 +228,19 @@ def main(
                 block = f.blocks[0]
                 for arr in block.data_arrays:
                     name = arr.name
-
+                    bindices = np.zeros(arr.shape[0], dtype=bool)
+                    bindices[indices] = True
                     # TODO: This is super ugly but I did not find another working way
                     if len(arr.shape) == 1:
-                        vals = arr[indices]
+                        vals = arr[bindices]
                     elif len(arr.shape) == 2:
-                        vals = arr[indices, :]
+                        vals = arr[bindices, :]
                     elif len(arr.shape) == 3:
-                        vals = arr[indices, :, :]
+                        try:
+                            vals = arr[bindices, :, :]
+                        except Exception as e:
+                            embed()
+                            exit()
                     else:
                         msg = f"Array has unexpected shape: {arr.shape}"
                         raise ValueError(msg)
@@ -256,9 +261,11 @@ def main(
         gc.collect()
 
     # Close the file for now
+    log.info("Extracted samples from all files, closing the file.")
     sample_file.close()
 
     # Fit the umap to the sampled data
+    log.info("Re-opening the file for UMAP fitting.")
     dataset = nixio.File.open(
         str(outfile),
         nixio.FileMode.ReadWrite,
@@ -267,7 +274,9 @@ def main(
     modelpath = outfile.parent
     pulses = dataset.blocks[0].data_arrays["mean_pulses"][:]
     embedder = UmapEmbedder("umap", str(modelpath / "umap.joblib"))
+    log.info("Fitting UMAP to the sampled data.")
     embedder.fit(pulses)
+    log.info("Predicting UMAP embedding for the sampled data.")
     yhat = embedder.predict(pulses)
 
     block = dataset.blocks[0]
@@ -275,3 +284,4 @@ def main(
         "umap_embedding", "embedding", data=yhat
     )
     dataset.close()
+    log.info("UMAP embedding saved to the file.")
