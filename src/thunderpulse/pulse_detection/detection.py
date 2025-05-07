@@ -54,33 +54,32 @@ def initialize_dataset() -> dict:
 def apply_filters(
     data: np.ndarray,
     rate: float,
-    prefiltering: PrefilterParameters,
-    params: FiltersParameters,
+    params: Params,
 ) -> np.ndarray:
     """Apply the specified filters to the data."""
-    if not isinstance(params.filters, list):
+    if not isinstance(params.filters.filters, list):
         msg = "Filters must be a list of strings"
         raise TypeError(msg)
-    if not isinstance(params.filter_params, list):
+    if not isinstance(params.filters.filter_params, list):
         msg = "Filter parameters must be a list of dictionaries"
         raise TypeError(msg)
-    if len(params.filters) != len(params.filter_params):
+    if len(params.filters.filters) != len(params.filters.filter_params):
         msg = "Filters and filter parameters must be the same length"
         raise ValueError(msg)
-    if len(params.filters) == 0:
+    if len(params.filters.filters) == 0:
         log.debug("No filters applied")
         return data
 
     # PreFilter operations
     # TODO: This should be a list of operations to apply before filtering
-    if prefiltering.common_median_reference:
+    if params.prefitering.common_median_reference:
         data = common_median_reference(data)
 
     # Apply all filters in sequence
     log.info("Applying filters")
     for filter_name, filter_params in zip(
-        params.filters,
-        params.filter_params,
+        params.filters.filters,
+        params.filters.filter_params,
         strict=True,
     ):
         log.debug(f"Applying filter: {filter_name}")
@@ -139,8 +138,8 @@ def detect_peaks(
         else:
             peak_params = {}
 
-        neg_peaks = np.zeros(0, dtype=int)
-        pos_peaks = np.zeros(0, dtype=int)
+        neg_peaks = np.zeros(0, dtype=np.int64)
+        pos_peaks = np.zeros(0, dtype=np.int64)
 
         if mode in {"peak", "both"}:
             pos_peaks, _ = find_peaks(signal, **peak_params)
@@ -290,15 +289,12 @@ def detect_peaks_on_block(
     input_data: np.ndarray,
     rate: float,
     blockinfo: dict,
-    prefilter: PrefilterParameters,
     params: Params,
 ) -> dict | None:
     n_channels = input_data.shape[1]
 
     # Apply filtering
-    block_filtered = apply_filters(
-        input_data, rate, prefilter, params=params.filters
-    )
+    block_filtered = apply_filters(input_data, rate, params=params)
 
     # Detect peaks on each channel
     peaks_list, channels_list = detect_peaks(
@@ -489,7 +485,7 @@ def process_dataset(
     # Open NIX file
     nix_file = nixio.File.open(str(output_path), nixio.FileMode.Overwrite)
     nix_block = nix_file.create_block(
-        name="pulses", type_="ThunderPulse.pulses"
+        name="pulses.nix", type_="ThunderPulse.pulses"
     )
 
     num_blocks = int(np.ceil(data.metadata.frames / (blocksize - overlap)))
@@ -505,17 +501,10 @@ def process_dataset(
             "overlap": overlap,
         }
 
-        # reshape to match (n_channels, n_samples)
-        # if len(block.shape) == 1:
-        #     block = np.expand_dims(block, axis=1)
-        # if block.shape[0] != data.metadata.channels:
-        #     block = np.transpose(block)
-
         block_peaks = detect_peaks_on_block(
             block,
             rate,
             blockinfo,
-            params.prefitering,
             params,
         )
 

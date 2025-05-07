@@ -1,6 +1,3 @@
-import pathlib
-import re
-
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
@@ -27,8 +24,6 @@ from thunderpulse.pulse_detection.detection import (
 )
 from thunderpulse.ui_callbacks.graphs.channel_selection import select_channels
 from thunderpulse.utils.check_config import check_config_params
-
-# from thunderpulse.utils.cleaning import remove_none_inputs
 from thunderpulse.utils.loggers import get_logger
 
 from . import data_selection as ds
@@ -176,9 +171,7 @@ def callbacks_traces(app):
         )
         index_time_start = int(time_slice[0] * d.metadata.samplerate)
 
-        sliced_data = apply_filters(
-            sliced_data, d.metadata.samplerate, prefilter, filters
-        )
+        sliced_data = apply_filters(sliced_data, d.metadata.samplerate, params)
 
         colors = [*px.colors.qualitative.Light24, *px.colors.qualitative.Vivid]
         fig = subplots.make_subplots(
@@ -213,27 +206,27 @@ def callbacks_traces(app):
                 sliced_data,
                 d.metadata.samplerate,
                 blockinfo,
-                prefilter,
                 params,
             )
             if output:
-                fig.add_traces(
-                    [
+                for i, ch in enumerate(channels, start=1):
+                    channel_peaks = output["centers"][
+                        output["channels"][:, ch]
+                    ]
+                    fig.add_trace(
                         go.Scattergl(
-                            x=output["centers"] / d.metadata.samplerate
+                            x=channel_peaks / d.metadata.samplerate
                             + time_slice[0],
-                            y=sliced_data[output["centers"], ch],
+                            y=sliced_data[channel_peaks, ch],
                             mode="markers",
                             marker_symbol="arrow",
                             marker_color="red",
                             marker_size=10,
                             name=f"Peaks {ch}",
-                        )
-                        for ch in channels
-                    ],
-                    rows=list(np.arange(channel_length) + 1),
-                    cols=[1] * channel_length,
-                )
+                        ),
+                        row=i,
+                        col=[1] * channel_length,
+                    )
             peaks = output
 
         fig.update_layout(
