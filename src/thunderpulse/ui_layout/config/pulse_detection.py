@@ -225,6 +225,16 @@ def create_pulse_offcanvas() -> dbc.Card:
                                                     id="sw_resampling_enable",
                                                     switch=True,
                                                 ),
+                                                dbc.Checklist(
+                                                    options=[
+                                                        {
+                                                            "label": "Centering the peaks",
+                                                            "value": 0,
+                                                        }
+                                                    ],
+                                                    id="sw_resampling_centering",
+                                                    switch=True,
+                                                ),
                                                 html.H6(
                                                     "Numbers to which the waveforms are resampled",
                                                     id="h6_resample_n",
