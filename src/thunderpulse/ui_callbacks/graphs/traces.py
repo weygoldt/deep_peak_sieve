@@ -77,6 +77,9 @@ def callbacks_traces(app):
                 "notch_freq": Input("num_notchfilter_freq", "value"),
                 "quality_factor": Input("num_notchfilter_quality", "value"),
             },
+            "general_pulse": {
+                "buffersize_s": Input("num_pulse_buffersize", "value")
+            },
             "pulse": {
                 "min_channels": Input("num_pulse_min_channels", "value"),
                 "mode": Input("select_pulse_mode", "value"),
@@ -96,7 +99,6 @@ def callbacks_traces(app):
             },
             "resample": {
                 "enabled": Input("sw_resampling_enable", "value"),
-                "centering": Input("sw_resampling_centering", "value"),
                 "n_resamples": Input("num_resampling_n", "value"),
             },
         },
@@ -107,6 +109,7 @@ def callbacks_traces(app):
         savgol,
         bandpass,
         notch,
+        general_pulse,
         pulse,
         findpeaks,
         resample,
@@ -155,7 +158,12 @@ def callbacks_traces(app):
         peaks = PeakDetectionParameters(**pulse, find_peaks_kwargs=findpeaks)
         resample = ResampleParameters(**resample)
         params = Params(
-            prefilter, filters, peaks, resample, sensoryarray=d.sensorarray
+            prefilter,
+            filters,
+            peaks,
+            resample,
+            sensoryarray=d.sensorarray,
+            **general_pulse,
         )
 
         channels = np.array(channels)
