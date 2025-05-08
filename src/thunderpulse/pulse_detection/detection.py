@@ -1,9 +1,10 @@
 """Main loop to parse large datasets and collect pulses."""
 
+import sys
 import gc
 from datetime import timedelta
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Iterable
 
 import humanize
 import matplotlib.pyplot as plt
@@ -97,6 +98,7 @@ def apply_filters(
 
 def detect_peaks(
     block: np.ndarray,
+    rate: float,
     mode: str = "both",
     find_peaks_kwargs: FindPeaksKwargs | None = None,
 ) -> tuple[list[np.ndarray], list[np.ndarray]]:
@@ -130,27 +132,49 @@ def detect_peaks(
     peaks_list = []
     channels_list = []
 
+    if find_peaks_kwargs:
+        peak_params = find_peaks_kwargs.to_kwargs(keep_none=True)
+    else:
+        peak_params = {}
+
+    # Convert parameters from seconds to samples
+    for key, value in peak_params.items():
+        # Select only the parameters that are x-axis related
+        if not key in ["width", "distance"]:
+            continue
+        if isinstance(value, Iterable) and not isinstance(value, str):
+            peak_params[key] = [x / rate for x in value]
+        elif isinstance(value, (int | float)):
+            peak_params[key] = value * rate
+        elif value is None:
+            pass
+        else:
+            msg = (
+                "Peak parameters must be either a list of numbers or a "
+                f"single number. Got {type(value)} for key {key}."
+            )
+            raise TypeError(msg)
+
+        print(f"Peak parameter {key}: {peak_params[key]}")
+
+    # Detect peaks on each channel
     for ch in range(block.shape[1]):
         signal = block[:, ch]
-        if find_peaks_kwargs:
-            peak_params = find_peaks_kwargs.to_kwargs(keep_none=True)
-        else:
-            peak_params = {}
 
-        neg_peaks = np.zeros(0, dtype=np.int64)
-        pos_peaks = np.zeros(0, dtype=np.int64)
-
-        if mode in {"peak", "both"}:
-            pos_peaks, _ = find_peaks(signal, **peak_params)
-        if mode in {"trough", "both"}:
-            neg_peaks, _ = find_peaks(-signal, **peak_params)
+        peaks = np.zeros(0, dtype=np.int32)
+        if mode == "peak":
+            peaks, _ = find_peaks(signal, **peak_params)
+        if mode == "trough":
+            peaks, _ = find_peaks(-signal, **peak_params)
+        if mode == "both":
+            peaks, _ = find_peaks(np.abs(signal), **peak_params)
 
         # concatenate & sort to preserve chronological order
-        peaks_ch = np.sort(np.concatenate((pos_peaks, neg_peaks)))
-        peaks_list.append(peaks_ch)
+        peaks = np.sort(peaks)
+        peaks_list.append(peaks)
 
         # build matching channel-id array
-        channels_list.append(np.full_like(peaks_ch, ch, dtype=np.int32))
+        channels_list.append(np.full_like(peaks, ch, dtype=np.int32))
 
     return peaks_list, channels_list
 
@@ -369,6 +393,7 @@ def detect_peaks_on_block(
     # Detect peaks on each channel
     peaks_list, channels_list = detect_peaks(
         block_filtered,
+        rate=rate,
         mode=params.peaks.mode,
         find_peaks_kwargs=params.peaks.find_peaks_kwargs,
     )
@@ -450,7 +475,8 @@ def detect_peaks_on_block(
     output_data["centers"] = centers_array
     output_data["start_stop_index"] = start_stop_index
 
-    log.warning("Detecting new Peaks")
+    log.info("Cutting out peaks")
+
     for _, (pks, chans, center) in enumerate(
         zip(grouped_peaks, grouped_channels, centers, strict=False)
     ):
@@ -459,22 +485,34 @@ def detect_peaks_on_block(
         bool_channels = np.zeros(n_channels, dtype=bool)
         bool_channels[chans] = True
 
-        center = center + blockinfo["blockiterval"] * (
-            blockinfo["blocksize"] - blockinfo["overlap"]
-        )
-
         start_stop_index = [
             center - cutout_window_around_peak,
             center + cutout_window_around_peak,
         ]
-        if start_stop_index[0] < 0:
+
+        if (start_stop_index[0] < 0) or (
+            start_stop_index[1] > input_data.shape[0]
+        ):
+            log.warning("Peak is too close to recording borders, skipping.")
             continue
 
         p = input_data[start_stop_index[0] : start_stop_index[1], :].T
         if p.shape[1] != cutout_window_around_peak * 2:
+            log.critical("This is not supposed to happen")
             continue
 
         peak_counter += 1
+
+        # Correct to global time, not just block time
+        center = center + blockinfo["blockiterval"] * (
+            blockinfo["blocksize"] - blockinfo["overlap"]
+        )
+
+        # Same for start/stop indices
+        start_stop_index = [
+            center - cutout_window_around_peak,
+            center + cutout_window_around_peak,
+        ]
 
         output_data["pulses"][peak_counter - 1, :] = p
         output_data["channels"][peak_counter - 1, :] = bool_channels
@@ -644,7 +682,7 @@ def main(
     for recording_path in subdirs:
         outfile_dir = savepath / recording_path.name
         outfile_dir.mkdir(parents=True, exist_ok=True)
-        outfile_path = outfile_dir / "pulses.nix"
+        outfile_path = outfile_dir / "pulses.h5"
         if outfile_path.exists() and not overwrite:
             log.info(f"File {outfile_path} already exists, skipping.")
             continue
