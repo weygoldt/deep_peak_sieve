@@ -13,7 +13,7 @@ def create_peak_table_card():
                     dash_table.DataTable(
                         id="peaks_table",
                         page_current=0,
-                        page_size=20,
+                        page_size=10,
                         page_action="custom",
                         style_header={
                             "backgroundColor": "rgb(30, 30, 30)",
