@@ -18,6 +18,8 @@ def callbacks(app):
         if not peaks_storage:
             return None, None, None
 
+        peaks_storage.pop("all_channels_groups")
+        peaks_storage.pop("all_pulses_groups")
         peaks_storage.pop("pulses")
         peaks_storage.pop("channels")
         peaks_storage.pop("all_channels")
