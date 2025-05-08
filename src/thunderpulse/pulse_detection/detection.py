@@ -1,7 +1,7 @@
 """Main loop to parse large datasets and collect pulses."""
 
-import sys
 import gc
+import sys
 from datetime import timedelta
 from pathlib import Path
 from typing import Annotated, Iterable
@@ -267,7 +267,7 @@ def filter_peak_groups(
     distances = np.linalg.norm(differences, axis=2)
 
     for peaks, chans in zip(grouped_peaks, grouped_channels, strict=True):
-        if len(peaks) > min_channels_with_peaks:
+        if len(peaks) >= min_channels_with_peaks:
             close_channels = np.argsort(distances[chans])[
                 :, 1 : min_channels_with_peaks + 1
             ]
@@ -316,25 +316,14 @@ def filter_peak_groups(
                     continue
 
             min_channels_index = np.where(
-                np.array([len(c) for c in new_peaks]) > min_channels_with_peaks
+                np.array([len(c) for c in new_peaks])
+                >= min_channels_with_peaks
             )[0]
 
             if min_channels_index.size > 0:
-                kept_peaks.extend(
-                    np.take_along_axis(
-                        np.array(new_peaks, dtype=np.object_),
-                        min_channels_index,
-                        axis=0,
-                    )
-                )
-                kept_channels.extend(
-                    np.take_along_axis(
-                        np.array(new_chans, dtype=np.object_),
-                        min_channels_index,
-                        axis=0,
-                    )
-                )
-
+                for index in min_channels_index:
+                    kept_peaks.append(new_peaks[index])
+                    kept_channels.append(new_chans[index])
     return kept_peaks, kept_channels
 
 
@@ -446,11 +435,10 @@ def detect_peaks_on_block(
         log.debug(msg)
         log.warning("No peaks detected")
         return None
+    output_data["all_pulses_groups"] = grouped_peaks
+    output_data["all_channels_groups"] = grouped_channels
 
-    # if params.resample.centering:
     centers = [int(np.mean(g)) for g in grouped_peaks]
-    # else:
-    #     centers =grouped_peaks
 
     # For each peak group, compute & store waveform
     peak_counter = 0
