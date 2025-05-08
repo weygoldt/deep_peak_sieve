@@ -40,6 +40,9 @@ def callbacks(app: Dash) -> None:
                 "lowcut": Input("num_bandpass_lowcutoff", "value"),
                 "highcut": Input("num_bandpass_highcutoff", "value"),
             },
+            "general_pulse": {
+                "buffersize_s": Input("num_pulse_buffersize", "value")
+            },
             "notch": {
                 "notch_freq": Input("num_notchfilter_freq", "value"),
                 "quality_factor": Input("num_notchfilter_quality", "value"),
@@ -74,6 +77,7 @@ def callbacks(app: Dash) -> None:
         savgol,
         bandpass,
         notch,
+        general_pulse,
         pulse,
         findpeaks,
         resample,
@@ -110,7 +114,9 @@ def callbacks(app: Dash) -> None:
         findpeaks = FindPeaksKwargs(**findpeaks)
         peaks = PeakDetectionParameters(**pulse, find_peaks_kwargs=findpeaks)
         resample = ResampleParameters(**resample)
-        params = Params(prefilter, filters, peaks, resample)
+        params = Params(
+            prefilter, filters, peaks, resample, d.sensorarray, **general_pulse
+        )
         current_parms = params.to_dict()
 
         save_path = pathlib.Path(filepath["save_path"]) / "config.nix"
@@ -121,8 +127,9 @@ def callbacks(app: Dash) -> None:
         # create_metadata_from_dict(current_parms, sec)
         file.close()
 
-        with open(save_path.with_suffix(".json"), "w") as f:
+        with open(save_path.with_suffix(".json"), "wb") as f:
             f.write(params.to_json())
+
 
 
 def create_metadata_from_dict(d, section: nixio.Section):

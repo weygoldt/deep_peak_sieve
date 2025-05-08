@@ -9,11 +9,11 @@ import numpy as np
 import orjson
 import typer
 from humanize.number import intword
-from rich.prompt import Confirm
 from IPython import embed
+from rich.prompt import Confirm
 
-from thunderpulse.nn.embedders import UmapEmbedder
 from thunderpulse.data_handling.data import get_file_list
+from thunderpulse.nn.embedders import UmapEmbedder
 from thunderpulse.utils.loggers import (
     configure_logging,
     get_logger,
@@ -35,6 +35,7 @@ Already working witht the ABC makes sense here.
 class BaseSampler:
     """Base class for different peak samplers for labeling peaks."""
 
+    # TODO: sample all flag
     def __init__(self, files: list, num_samples: int):
         self.files = files
         self.num_samples = num_samples
@@ -180,6 +181,7 @@ def main(
     sample_indices = [sample_indices[i].tolist() for i in sample_indices_index]
     data = [data[i] for i in sample_indices_index]
     data = [str(file.resolve()) for file in data]
+    #TODO: In Nix file
 
     json_data = {
         "dtype": dtype,

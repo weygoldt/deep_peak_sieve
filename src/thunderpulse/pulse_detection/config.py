@@ -8,7 +8,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import orjson
 
+from thunderpulse.data_handling.data import SensorArray
 from thunderpulse.dsp.filters import (
     bandpass_filter,
     notch_filter,
@@ -134,6 +136,7 @@ class FiltersParameters(KwargsDataclass):
 class ResampleParameters(KwargsDataclass):
     """Zero-hold / FFT resampling settings."""
 
+    centering: bool = True
     enabled: bool = True
     n_resamples: int = 512
 
@@ -162,6 +165,7 @@ class Params:
         default_factory=PeakDetectionParameters
     )
     resample: ResampleParameters = field(default_factory=ResampleParameters)
+    sensoryarray: SensorArray = field(default_factory=SensorArray)
     buffersize_s: float = 60.0  # seconds
 
     # ── (de)serialisation helpers ──────────────────────────────────────
@@ -202,7 +206,7 @@ class Params:
 
     def to_json(self, **json_kwargs) -> str:
         """Serialise to JSON string."""
-        return json.dumps(self.to_dict(), **json_kwargs)
+        return orjson.dumps(self.to_dict(), option=orjson.OPT_SERIALIZE_NUMPY)
 
     @classmethod
     def from_json(cls, s: str) -> "Params":
