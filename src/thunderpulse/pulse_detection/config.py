@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import orjson
 
 from thunderpulse.data_handling.data import SensorArray
 from thunderpulse.dsp.filters import (
@@ -164,8 +165,8 @@ class Params:
         default_factory=PeakDetectionParameters
     )
     resample: ResampleParameters = field(default_factory=ResampleParameters)
-    buffersize_s: float = 60.0  # seconds
     sensoryarray: SensorArray = field(default_factory=SensorArray)
+    buffersize_s: float = 60.0  # seconds
 
     # ── (de)serialisation helpers ──────────────────────────────────────
     def to_dict(self) -> dict:
@@ -205,7 +206,7 @@ class Params:
 
     def to_json(self, **json_kwargs) -> str:
         """Serialise to JSON string."""
-        return json.dumps(self.to_dict(), **json_kwargs)
+        return orjson.dumps(self.to_dict(), option=orjson.OPT_SERIALIZE_NUMPY)
 
     @classmethod
     def from_json(cls, s: str) -> "Params":
