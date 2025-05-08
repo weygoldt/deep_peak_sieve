@@ -592,7 +592,7 @@ def main(
         savepath = datapath.parent / f"{str(datapath.name)}_pulses"
     savepath.mkdir(parents=True, exist_ok=True)
 
-    sensor_layout_path = datapath / "electrode_layout.json"
+    possible_sensor_layout_names = ["electrode_layout.json", "probe.prb"]
     config_path = datapath / "config.json"
     # TODO: add probe path
 
@@ -600,9 +600,24 @@ def main(
         msg = f"No config file found at {config_path}. Please provide a config file."
         raise FileNotFoundError(msg)
 
-    if not sensor_layout_path.exists():
-        msg = f"No probe file found at {sensor_layout_path}. Please provide a probe file."
+    sensor_layout_found = False
+    sensor_layout_path = None
+    log.info("Searching for sensor layout file")
+    for sensor_layout_name in possible_sensor_layout_names:
+        sensor_layout_path = datapath / sensor_layout_name
+        if sensor_layout_path.exists():
+            sensor_layout_found = True
+            msg = f"Found sensor layout file: {sensor_layout_path}"
+            log.info(msg)
+    if not sensor_layout_found or sensor_layout_path is None:
+        msg = (
+            "No sensor layout file found. Please provide a sensor layout file "
+            "in the dataset directory."
+            f" Possible names: {possible_sensor_layout_names}"
+            f" Found: {sensor_layout_path}"
+        )
         raise FileNotFoundError(msg)
+    log.info(f"Using sensor layout file: {sensor_layout_path}")
 
     params = Params().from_json(str(config_path))
     subdirs = sorted(datapath.glob("*/"))
