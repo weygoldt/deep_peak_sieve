@@ -1,5 +1,6 @@
 from typing import Annotated
 
+from IPython import embed
 import dash_bootstrap_components as dbc
 import typer
 from dash import Dash, dcc, html
@@ -8,7 +9,7 @@ from thunderpulse import ui_callbacks, ui_layout
 from thunderpulse.utils.loggers import configure_logging, get_logger
 
 typer_app = typer.Typer()
-log = get_logger(__name__)
+# log = get_logger(__name__)
 
 
 @typer_app.command()
@@ -22,7 +23,7 @@ def main(
 ) -> None:
     """Generate the Dash app."""
     configure_logging(verbose)
-    log.info("Starting Thunderpulse Dashboard")
+    # app.log.info("Starting Thunderpulse Dashboard")
 
     app = Dash(
         external_stylesheets=[dbc.themes.DARKLY],
@@ -69,7 +70,7 @@ def main(
                                         style={"textAlign": "center"},
                                     ),
                                     visualization_tabs,
-                                    # dcc.Store(id="store_umap_selection"),
+                                    dcc.Store(id="store_umap_selection"),
                                     time_slider,
                                     dcc.Store(id="peak_storage"),
                                     html.Br(),
@@ -84,8 +85,9 @@ def main(
         fluid=True,
     )
 
-    log.info("Initializing callbacks")
-    log.info("Initializing config tabs")
+    app.logger.info("Initializing callbacks")
+    app.logger.info("Initializing config tabs")
+
     ui_callbacks.config.detection_card.callbacks(app)
     ui_callbacks.config.filter_card.callbacks(app)
     ui_callbacks.config.path_card.callbacks(app)
@@ -96,9 +98,10 @@ def main(
     ui_callbacks.channel_slider.callbacks(app)
     ui_callbacks.time_slider.callbacks(app)
 
-    log.info("Initializing graphs")
+    app.logger.info("Initializing graphs")
     ui_callbacks.graphs.traces.callbacks_traces(app)
     ui_callbacks.graphs.probe.callbacks_sensory_array(app)
+    ui_callbacks.graphs.dashumap.callbacks_umap(app)
     ui_callbacks.keyboard_shortcuts.create_shortcuts(app)
 
     ui_callbacks.peak_table.callbacks(app)

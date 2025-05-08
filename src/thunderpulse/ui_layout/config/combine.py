@@ -1,11 +1,14 @@
 import dash_bootstrap_components as dbc
 from dash import html
 
+from thunderpulse.ui_layout.config.classification_card import (
+    create_classification_offcanvas,
+)
 from thunderpulse.ui_layout.config.filter_card import (
     create_filter_offcanvas,
 )
 from thunderpulse.ui_layout.config.paths_card import create_paths_offcanvas
-from thunderpulse.ui_layout.config.pulse_detection import (
+from thunderpulse.ui_layout.config.pulse_detection_card import (
     create_pulse_offcanvas,
 )
 
@@ -14,6 +17,7 @@ def create_config():
     io_offcanvas = create_paths_offcanvas()
     filter_offcanvas = create_filter_offcanvas()
     pulse_offcanvas = create_pulse_offcanvas()
+    classfication_offvanvas = create_classification_offcanvas()
 
     navbar = dbc.Card(
         [
@@ -70,6 +74,24 @@ def create_config():
                                         title="Pulse detection",
                                         is_open=False,
                                         id="pulse_offcanvas",
+                                        backdrop=False,
+                                        scrollable=True,
+                                    ),
+                                ]
+                            ),
+                            dbc.Col(
+                                [
+                                    dbc.Button(
+                                        "Classification",
+                                        color="info",
+                                        id="bt_classification_offcanvas",
+                                        n_clicks=0,
+                                    ),
+                                    dbc.Offcanvas(
+                                        classfication_offvanvas,
+                                        title="Classificaiton",
+                                        is_open=False,
+                                        id="classificaion_offcanvas",
                                         backdrop=False,
                                         scrollable=True,
                                     ),
