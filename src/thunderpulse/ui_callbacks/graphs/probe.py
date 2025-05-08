@@ -66,16 +66,18 @@ def callbacks_sensory_array(app):
             colors[sorted_sensoryarray_y[channels[0]]] = "red"
 
         fig = go.Figure(
-            data=go.Scattergl(
+            data=go.Scatter(
                 x=d.sensorarray.x,
                 y=d.sensorarray.y,
-                mode="markers",
+                mode="markers+text",
                 marker_symbol="square",
                 marker_color=colors,
                 marker_sizemode="area",
                 hoverinfo="text",
                 hovertemplate="<b>%{text}</b>",
-                text=[f"Channel index {int(i)}" for i in d.sensorarray.ids],
+                text=[f"{int(i)}" for i in d.sensorarray.ids],
+                textposition="bottom right",
+
             ),
         )
         fig.update_layout(
