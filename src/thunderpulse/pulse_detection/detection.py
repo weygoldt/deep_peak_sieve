@@ -255,10 +255,10 @@ def filter_peak_groups(
                 new_grouping_index[0], return_counts=True
             )
             if not new_grouping_index[0].size > 0:
-                peaks = [[p] for p in peaks]
-                chans = [[ch] for ch in chans]
-                kept_peaks.extend(np.array(peaks))
-                kept_channels.extend(np.array(chans))
+                # peaks = [[p] for p in peaks]
+                # chans = [[ch] for ch in chans]
+                # kept_peaks.extend(np.array(peaks))
+                # kept_channels.extend(np.array(chans))
                 continue
 
             new_group_chan = np.split(
@@ -291,8 +291,25 @@ def filter_peak_groups(
                     )
                     continue
 
-            kept_peaks.extend(new_peaks)
-            kept_channels.extend(new_chans)
+            min_channels_index = np.where(
+                np.array([len(c) for c in new_peaks]) > min_channels_with_peaks
+            )[0]
+
+            if min_channels_index.size > 0:
+                kept_peaks.extend(
+                    np.take_along_axis(
+                        np.array(new_peaks, dtype=np.object_),
+                        min_channels_index,
+                        axis=0,
+                    )
+                )
+                kept_channels.extend(
+                    np.take_along_axis(
+                        np.array(new_chans, dtype=np.object_),
+                        min_channels_index,
+                        axis=0,
+                    )
+                )
 
     return kept_peaks, kept_channels
 

@@ -224,7 +224,7 @@ def callbacks_traces(app):
                     ]
                     fig.add_trace(
                         go.Scattergl(
-                            x=all_pulses / d.metadata.samplerate
+                            x=(all_pulses + 1) / d.metadata.samplerate
                             + time_slice[0],
                             y=sliced_data[all_pulses, ch],
                             mode="markers",
