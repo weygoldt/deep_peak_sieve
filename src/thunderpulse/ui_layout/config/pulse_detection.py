@@ -41,6 +41,19 @@ def create_pulse_offcanvas() -> dbc.Card:
                                         dbc.CardBody(
                                             [
                                                 html.H6(
+                                                    "Buffersize for detection [s]",
+                                                    id="h6_pluse_min_channels",
+                                                ),
+                                                dbc.Input(
+                                                    type="number",
+                                                    placeholder="float",
+                                                    min=1,
+                                                    id="num_pulse_buffersize",
+                                                    style={"width": "70%"},
+                                                    persistence=True,
+                                                    persistence_type="local",
+                                                ),
+                                                html.H6(
                                                     "Number of channels where pulses should be detected",
                                                     id="h6_pluse_min_channels",
                                                 ),
@@ -223,16 +236,6 @@ def create_pulse_offcanvas() -> dbc.Card:
                                                         }
                                                     ],
                                                     id="sw_resampling_enable",
-                                                    switch=True,
-                                                ),
-                                                dbc.Checklist(
-                                                    options=[
-                                                        {
-                                                            "label": "Centering the peaks",
-                                                            "value": 0,
-                                                        }
-                                                    ],
-                                                    id="sw_resampling_centering",
                                                     switch=True,
                                                 ),
                                                 html.H6(
