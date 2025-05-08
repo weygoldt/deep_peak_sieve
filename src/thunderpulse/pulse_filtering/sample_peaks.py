@@ -2,6 +2,7 @@ import gc
 import sys
 from abc import abstractmethod
 from pathlib import Path
+import matplotlib.pyplot as plt
 from typing import Annotated
 
 import nixio
@@ -181,7 +182,7 @@ def main(
     sample_indices = [sample_indices[i].tolist() for i in sample_indices_index]
     data = [data[i] for i in sample_indices_index]
     data = [str(file.resolve()) for file in data]
-    #TODO: In Nix file
+    # TODO: In Nix file
 
     json_data = {
         "dtype": dtype,
@@ -280,6 +281,9 @@ def main(
     embedder.fit(pulses)
     log.info("Predicting UMAP embedding for the sampled data.")
     yhat = embedder.predict(pulses)
+
+    plt.plot(yhat[:, 0], yhat[:, 1], "o", markersize=1)
+    plt.show()
 
     block = dataset.blocks[0]
     data_array = block.create_data_array(

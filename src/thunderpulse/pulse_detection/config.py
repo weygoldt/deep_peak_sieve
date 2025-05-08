@@ -202,6 +202,12 @@ class Params:
             ),
             resample=ResampleParameters(**d["resample"]),
             buffersize_s=d["buffersize_s"],
+            sensoryarray=SensorArray(
+                **{
+                    key: np.array(val)
+                    for key, val in d["sensoryarray"].items()
+                }
+            ),
         )
 
     def to_json(self, **json_kwargs) -> str:

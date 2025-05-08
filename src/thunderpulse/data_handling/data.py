@@ -155,9 +155,7 @@ def load_data(
             ),
         )
 
-    log.debug("Data loaded")
     log.info("Data loaded")
-    log.warning("Data loaded")
     return data_c
 
 

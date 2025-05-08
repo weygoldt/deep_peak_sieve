@@ -18,12 +18,8 @@ def callbacks(app):
         if not peaks_storage:
             return None, None, None
 
-        peaks_storage.pop("all_channels_groups")
-        peaks_storage.pop("all_pulses_groups")
         peaks_storage.pop("pulses")
         peaks_storage.pop("channels")
-        peaks_storage.pop("all_channels")
-        peaks_storage.pop("all_pulses")
 
         starts = np.array(peaks_storage["start_stop_index"])[:, 0]
         stops = np.array(peaks_storage["start_stop_index"])[:, 1]
