@@ -219,11 +219,13 @@ def callbacks_traces(app):
                 blockinfo,
                 params,
             )
+
             if output:
                 for i, ch in enumerate(channels, start=1):
-                    channel_peaks = output["centers"][
-                        output["channels"][:, ch]
-                    ]
+                    # pulse_channel_index = np.where(ch == output["channels"])
+                    # channel_peaks = output["centers"][
+                    #     output["channels"][:, ch]
+                    # ]
                     # all_channels_index = np.where(
                     #     np.concatenate(output["all_channels"]) == ch
                     # )
@@ -247,9 +249,9 @@ def callbacks_traces(app):
 
                     fig.add_trace(
                         go.Scattergl(
-                            x=channel_peaks / d.metadata.samplerate
+                            x=output["centers"] / d.metadata.samplerate
                             + time_slice[0],
-                            y=sliced_data[channel_peaks, ch],
+                            y=sliced_data[output["centers"], ch],
                             mode="markers",
                             marker_symbol="arrow",
                             marker_color="red",

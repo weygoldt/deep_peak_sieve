@@ -42,7 +42,7 @@ def create_pulse_offcanvas() -> dbc.Card:
                                             [
                                                 html.H6(
                                                     "Buffersize for detection [s]",
-                                                    id="h6_pluse_min_channels",
+                                                    id="h6_pulse_buffersize",
                                                 ),
                                                 dbc.Input(
                                                     type="number",
@@ -55,7 +55,7 @@ def create_pulse_offcanvas() -> dbc.Card:
                                                 ),
                                                 html.H6(
                                                     "Number of channels where pulses should be detected",
-                                                    id="h6_pluse_min_channels",
+                                                    id="h6_pulse_min_channels",
                                                 ),
                                                 dbc.Input(
                                                     type="number",
@@ -67,8 +67,21 @@ def create_pulse_offcanvas() -> dbc.Card:
                                                     persistence_type="local",
                                                 ),
                                                 html.H6(
+                                                    "Distance on sensoryarray on wich detected pulses are grouped",
+                                                    id="h6_pulse_distance",
+                                                ),
+                                                dbc.Input(
+                                                    type="number",
+                                                    placeholder="float",
+                                                    min=1,
+                                                    id="num_pulse_distance",
+                                                    style={"width": "70%"},
+                                                    persistence=True,
+                                                    persistence_type="local",
+                                                ),
+                                                html.H6(
                                                     "Mode of pulse detection,[peak, trough, both]",
-                                                    id="h6_pluse_mode",
+                                                    id="h6_pulse_mode",
                                                 ),
                                                 dbc.Select(
                                                     id="select_pulse_mode",
@@ -90,8 +103,8 @@ def create_pulse_offcanvas() -> dbc.Card:
                                                     persistence_type="local",
                                                 ),
                                                 html.H6(
-                                                    "Time for grouping pluses across channels [seconds]",
-                                                    id="h6_pluse_general",
+                                                    "Time for grouping pulses across channels [seconds]",
+                                                    id="h6_pulse_general",
                                                 ),
                                                 dbc.Input(
                                                     type="number",
@@ -103,7 +116,7 @@ def create_pulse_offcanvas() -> dbc.Card:
                                                 ),
                                                 html.H6(
                                                     "Waveform duration from the center of the pulse [seconds]",
-                                                    id="h6_pluse_waveform",
+                                                    id="h6_pulse_waveform",
                                                 ),
                                                 dbc.Input(
                                                     type="number",

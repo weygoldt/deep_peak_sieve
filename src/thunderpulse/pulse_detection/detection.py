@@ -1,11 +1,11 @@
 """Main loop to parse large datasets and collect pulses."""
 
 import gc
+import re
 import sys
 from datetime import timedelta
 from pathlib import Path
 from typing import Annotated, Iterable
-from IPython import embed
 
 import humanize
 import matplotlib.pyplot as plt
@@ -102,7 +102,7 @@ def detect_peaks(
     rate: float,
     mode: str = "both",
     find_peaks_kwargs: FindPeaksKwargs | None = None,
-) -> tuple[list[np.ndarray], list[np.ndarray]]:
+) -> tuple[np.ndarray, np.ndarray]:
     """Detect peaks in 1D signal.
 
     Parameters
@@ -177,190 +177,192 @@ def detect_peaks(
         # build matching channel-id array
         channels_list.append(np.full_like(peaks, ch, dtype=np.int32))
 
-    return peaks_list, channels_list
+    return np.concatenate(peaks_list), np.concatenate(channels_list)
 
 
-def group_peaks_across_channels_by_time(
-    peaks: list[np.ndarray], channels: list[np.ndarray], peak_window: int = 10
-) -> tuple:
-    """Group peaks that lie within a certain distance (peak_window).
-
-    Only merges them if they belong to different channels.
-    """
-    log.info("Grouping peaks across channels")
-    # Flatten out everything and sort
-    peaks = np.concatenate(peaks)
-    channels = np.concatenate(channels)
-    sorter = np.argsort(peaks)
-    peaks = peaks[sorter]
-    channels = channels[sorter]
-
-    peak_groups = []
-    peak_channels = []
-    if len(peaks) == 0:
-        return peak_groups, peak_channels
-
-    # Initialize the first group
-    current_group = [peaks[0]]
-    current_channels = [channels[0]]
-    for p, c in zip(peaks[1:], channels[1:], strict=False):
-        # Check if the current peak is within the peak_window of the last peak
-        # in the current group, and if channel is new
-        if ((p - current_group[-1]) < peak_window) and (
-            c not in current_channels
-        ):
-            current_group.append(p)
-            current_channels.append(c)
-        else:
-            peak_groups.append(current_group)
-            peak_channels.append(current_channels)
-            current_group = [p]
-            current_channels = [c]
-
-    # Append the final group
-    peak_groups.append(current_group)
-    peak_channels.append(current_channels)
-
-    # Check duplicates
-    for i in range(len(peak_groups)):
-        _, counts = np.unique(peak_channels[i], return_counts=True)
-        if np.any(counts > 1):
-            msg = (
-                "Found duplicate channels in a peak group! "
-                f"Peak group: {peak_groups[i]}, Channels: {peak_channels[i]}"
-            )
-            log.warning(msg)
-
-    return peak_groups, peak_channels
-
-
-def filter_peak_groups_by_distance(
-    grouped_peaks: list[np.ndarray],
-    grouped_channels: list[np.ndarray],
-    sensoryarray: SensorArray,
-    min_channels_with_peaks: int = 1,
-) -> tuple[list[np.ndarray], list[np.ndarray]]:
-    """Filter out peak groups that are found on too few channels.
-
-    Parameters
-    ----------
-    grouped_peaks
-        List of 1-D index arrays – one array per detected peak group.
-    grouped_channels
-        List of 1-D channel-index arrays matching `grouped_peaks`.
-    min_channels_with_peaks
-        A group is **kept** only if it is present on *strictly more than* this
-        number of channels.
-
-    Returns
-    -------
-    kept_peaks, kept_channels
-        Two lists (same length, same order) containing only the qualifying
-        groups.
-    """
-    log.info("Filtering peak groups by distance")
-    kept_peaks: list[np.ndarray] = []
-    kept_channels: list[np.ndarray] = []
-    close_channels = sensoryarray.ids[np.argsort(sensoryarray.y)]
-
-    points = np.vstack((sensoryarray.x, sensoryarray.y)).T
-    differences = points[:, np.newaxis, :] - points[np.newaxis, :, :]
-    distances = np.linalg.norm(differences, axis=2)
-
-    for peaks, chans in zip(grouped_peaks, grouped_channels, strict=True):
-        # if len(peaks) >= min_channels_with_peaks:
-        close_channels = np.argsort(distances[chans])[
-            :, 1 : min_channels_with_peaks + 1
-        ]
-        new_grouping_bool = (
-            close_channels[:, np.newaxis] == np.array(chans)[:, np.newaxis]
-        )
-        new_grouping_index = np.where(new_grouping_bool)
-        _, first_dim_count = np.unique(
-            new_grouping_index[0], return_counts=True
-        )
-        if new_grouping_index[0].size == 0:
-            peaks = [[p] for p in peaks]
-            chans = [[ch] for ch in chans]
-            kept_peaks.extend(np.array(peaks))
-            kept_channels.extend(np.array(chans))
-            continue
-
-        new_group_chan = np.split(
-            np.array(chans)[new_grouping_index[1]],
-            np.cumsum(first_dim_count[:-1]),
-        )
-        new_group_peaks = np.split(
-            np.array(peaks)[new_grouping_index[1]],
-            np.cumsum(first_dim_count[:-1]),
-        )
-
-        new_peaks = [new_group_peaks[0]]
-        new_chans = [new_group_chan[0]]
-        for ngc, ngp in zip(
-            new_group_chan[1:], new_group_peaks[1:], strict=True
-        ):
-            check_if_in_group = ~np.isin(
-                ngc, np.concatenate(new_chans).flatten()
-            )
-            if np.all(check_if_in_group):
-                new_chans.append(ngc)
-                new_peaks.append(ngp)
-                continue
-            if np.any(check_if_in_group):
-                new_chans[-1] = np.append(
-                    new_chans[-1], ngc[check_if_in_group]
-                )
-                new_peaks[-1] = np.append(
-                    new_peaks[-1], ngp[check_if_in_group]
-                )
-                continue
-
-        min_channels_index = np.where(
-            np.array([len(c) for c in new_peaks]) >= min_channels_with_peaks
-        )[0]
-
-        if min_channels_index.size > 0:
-            for index in min_channels_index:
-                kept_peaks.append(new_peaks[index])
-                kept_channels.append(new_chans[index])
-
-    return kept_peaks, kept_channels
-
-
-def filter_peak_groups_by_count(
-    grouped_peaks: list[np.ndarray],
-    grouped_channels: list[np.ndarray],
-    min_channels_with_peaks: int = 1,
-) -> tuple[list[np.ndarray], list[np.ndarray]]:
-    """Filter out peak groups that are found on too few channels.
-
-    Parameters
-    ----------
-    grouped_peaks
-        List of 1-D index arrays – one array per detected peak group.
-    grouped_channels
-        List of 1-D channel-index arrays matching `grouped_peaks`.
-    min_channels_with_peaks
-        A group is **kept** only if it is present on *strictly more than* this
-        number of channels.
-
-    Returns
-    -------
-    kept_peaks, kept_channels
-        Two lists (same length, same order) containing only the qualifying
-        groups.
-    """
-    log.info("Filtering peak groups")
-    kept_peaks: list[np.ndarray] = []
-    kept_channels: list[np.ndarray] = []
-
-    for peaks, chans in zip(grouped_peaks, grouped_channels, strict=True):
-        if len(peaks) >= min_channels_with_peaks:
-            kept_peaks.append(peaks)
-            kept_channels.append(chans)
-
-    return kept_peaks, kept_channels
+# def group_peaks_across_channels_by_time(
+#     peaks: list[np.ndarray], channels: list[np.ndarray], peak_window: int = 10
+# ) -> tuple:
+#     """Group peaks that lie within a certain distance (peak_window).
+#
+#     Only merges them if they belong to different channels.
+#     """
+#     log.info("Grouping peaks across channels")
+#     # Flatten out everything and sort
+#     peaks = np.concatenate(peaks)
+#     channels = np.concatenate(channels)
+#     sorter = np.argsort(peaks)
+#     peaks = peaks[sorter]
+#     channels = channels[sorter]
+#
+#     peak_groups = []
+#     peak_channels = []
+#     if len(peaks) == 0:
+#         return peak_groups, peak_channels
+#
+#     # Initialize the first group
+#     current_group = [peaks[0]]
+#     current_channels = [channels[0]]
+#     for p, c in zip(peaks[1:], channels[1:], strict=False):
+#         # Check if the current peak is within the peak_window of the last peak
+#         # in the current group, and if channel is new
+#         if ((p - current_group[-1]) < peak_window) and (
+#             c not in current_channels
+#         ):
+#             current_group.append(p)
+#             current_channels.append(c)
+#         else:
+#             peak_groups.append(current_group)
+#             peak_channels.append(current_channels)
+#             current_group = [p]
+#             current_channels = [c]
+#
+#     # Append the final group
+#     peak_groups.append(current_group)
+#     peak_channels.append(current_channels)
+#
+#     # Check duplicates
+#     for i in range(len(peak_groups)):
+#         _, counts = np.unique(peak_channels[i], return_counts=True)
+#         if np.any(counts > 1):
+#             msg = (
+#                 "Found duplicate channels in a peak group! "
+#                 f"Peak group: {peak_groups[i]}, Channels: {peak_channels[i]}"
+#             )
+#             log.warning(msg)
+#
+#     return peak_groups, peak_channels
+#
+#
+# def filter_peak_groups_by_distance(
+#     grouped_peaks: list[np.ndarray],
+#     grouped_channels: list[np.ndarray],
+#     sensoryarray: SensorArray,
+#     min_channels_with_peaks: int = 1,
+# ) -> tuple[list[np.ndarray], list[np.ndarray]]:
+#     """Filter out peak groups that are found on too few channels.
+#
+#     Parameters
+#     ----------
+#     grouped_peaks
+#         List of 1-D index arrays – one array per detected peak group.
+#     grouped_channels
+#         List of 1-D channel-index arrays matching `grouped_peaks`.
+#     min_channels_with_peaks
+#         A group is **kept** only if it is present on *strictly more than* this
+#         number of channels.
+#
+#     Returns
+#     -------
+#     kept_peaks, kept_channels
+#         Two lists (same length, same order) containing only the qualifying
+#         groups.
+#     """
+#     log.info("Filtering peak groups by distance")
+#     kept_peaks: list[np.ndarray] = []
+#     kept_channels: list[np.ndarray] = []
+#     close_channels = sensoryarray.ids[np.argsort(sensoryarray.y)]
+#
+#     points = np.vstack((sensoryarray.x, sensoryarray.y)).T
+#     differences = points[:, np.newaxis, :] - points[np.newaxis, :, :]
+#     distances = np.linalg.norm(differences, axis=2)
+#
+#     for peaks, chans in zip(grouped_peaks, grouped_channels, strict=True):
+#         # if len(peaks) >= min_channels_with_peaks:
+#         close_channels = np.argsort(distances[chans])[
+#             :, 1 : min_channels_with_peaks + 1
+#         ]
+#         new_grouping_bool = (
+#             close_channels[:, np.newaxis] == np.array(chans)[:, np.newaxis]
+#         )
+#         new_grouping_index = np.where(new_grouping_bool)
+#         _, first_dim_count = np.unique(
+#             new_grouping_index[0], return_counts=True
+#         )
+#         if new_grouping_index[0].size == 0:
+#             peaks = [[p] for p in peaks]
+#             chans = [[ch] for ch in chans]
+#             kept_peaks.extend(np.array(peaks))
+#             kept_channels.extend(np.array(chans))
+#             continue
+#
+#         new_group_chan = np.split(
+#             np.array(chans)[new_grouping_index[1]],
+#             np.cumsum(first_dim_count[:-1]),
+#         )
+#         new_group_peaks = np.split(
+#             np.array(peaks)[new_grouping_index[1]],
+#             np.cumsum(first_dim_count[:-1]),
+#         )
+#
+#         new_peaks = [new_group_peaks[0]]
+#         new_chans = [new_group_chan[0]]
+#         for ngc, ngp in zip(
+#             new_group_chan[1:], new_group_peaks[1:], strict=True
+#         ):
+#             check_if_in_group = ~np.isin(
+#                 ngc, np.concatenate(new_chans).flatten()
+#             )
+#             if np.all(check_if_in_group):
+#                 new_chans.append(ngc)
+#                 new_peaks.append(ngp)
+#                 continue
+#             if np.any(check_if_in_group):
+#                 new_chans[-1] = np.append(
+#                     new_chans[-1], ngc[check_if_in_group]
+#                 )
+#                 new_peaks[-1] = np.append(
+#                     new_peaks[-1], ngp[check_if_in_group]
+#                 )
+#                 continue
+#
+#         # kept_peaks.extend(new_peaks)
+#         # kept_channels.extend(new_chans)
+#         min_channels_index = np.where(
+#             np.array([len(c) for c in new_peaks]) >= min_channels_with_peaks
+#         )[0]
+#
+#         if min_channels_index.size > 0:
+#             for index in min_channels_index:
+#                 kept_peaks.append(new_peaks[index])
+#                 kept_channels.append(new_chans[index])
+#
+#     return kept_peaks, kept_channels
+#
+#
+# def filter_peak_groups_by_count(
+#     grouped_peaks: list[np.ndarray],
+#     grouped_channels: list[np.ndarray],
+#     min_channels_with_peaks: int = 1,
+# ) -> tuple[list[np.ndarray], list[np.ndarray]]:
+#     """Filter out peak groups that are found on too few channels.
+#
+#     Parameters
+#     ----------
+#     grouped_peaks
+#         List of 1-D index arrays – one array per detected peak group.
+#     grouped_channels
+#         List of 1-D channel-index arrays matching `grouped_peaks`.
+#     min_channels_with_peaks
+#         A group is **kept** only if it is present on *strictly more than* this
+#         number of channels.
+#
+#     Returns
+#     -------
+#     kept_peaks, kept_channels
+#         Two lists (same length, same order) containing only the qualifying
+#         groups.
+#     """
+#     log.info("Filtering peak groups")
+#     kept_peaks: list[np.ndarray] = []
+#     kept_channels: list[np.ndarray] = []
+#
+#     for peaks, chans in zip(grouped_peaks, grouped_channels, strict=True):
+#         if len(peaks) >= min_channels_with_peaks:
+#             kept_peaks.append(peaks)
+#             kept_channels.append(chans)
+#
+#     return kept_peaks, kept_channels
 
 
 def compute_mean_peak(
@@ -416,23 +418,12 @@ def detect_peaks_on_block(
     block_filtered = apply_filters(input_data, rate, params=params)
 
     # Detect peaks on each channel
-    peaks_list, channels_list = detect_peaks(
+    pulse_list, channels_list = detect_peaks(
         block_filtered,
         rate=rate,
         mode=params.peaks.mode,
         find_peaks_kwargs=params.peaks.find_peaks_kwargs,
     )
-
-    # NOTE: Take default Values if is None
-    # Convert config paramters from seconds to samples
-    if not params.peaks.min_peak_distance_s:
-        min_peak_distance = int(
-            np.ceil(Params().peaks.min_peak_distance_s * rate)
-        )
-    else:
-        min_peak_distance = int(
-            np.ceil(params.peaks.min_peak_distance_s * rate)
-        )
 
     if not params.peaks.cutout_window_around_peak_s:
         cutout_window_around_peak = int(
@@ -443,121 +434,178 @@ def detect_peaks_on_block(
             np.ceil(params.peaks.cutout_window_around_peak_s * rate)
         )
 
-    # Group peaks across channels when they are close in time
-    grouped_peaks, grouped_channels = group_peaks_across_channels_by_time(
-        peaks_list,
-        channels_list,
-        peak_window=min_peak_distance,
+    cutout_size = cutout_window_around_peak * 2
+
+    bad_pulse = np.where(
+        (pulse_list - cutout_window_around_peak < 0)
+        | (pulse_list + cutout_window_around_peak > input_data.shape[0])
+    )[0]
+    good_pulse_bool = np.ones_like(pulse_list, dtype=bool)
+    good_pulse_bool[bad_pulse] = False
+
+    start_stop_index = np.full(
+        shape=(len(pulse_list), 2), fill_value=-1, dtype=np.int32
     )
+    pulse_center = np.zeros_like(pulse_list)
 
-    # output_data["all_pulses"] = grouped_peaks
-    # output_data["all_channels"] = grouped_channels
+    pulse_array = np.zeros((pulse_list.shape[0], cutout_size))
 
-    # Filter out groups that do not meet the threshold
-    if not params.peaks.min_channels:
-        min_channels = Params().peaks.min_channels
-    else:
-        min_channels = params.peaks.min_channels
-
-    grouped_peaks, grouped_channels = filter_peak_groups_by_distance(
-        grouped_peaks,
-        grouped_channels,
-        params.sensoryarray,
-    )
-
-    if min_channels > 1:
-        grouped_peaks, grouped_channels = filter_peak_groups_by_count(
-            grouped_peaks,
-            grouped_channels,
-            min_channels_with_peaks=min_channels,
+    for i, (peak, ch) in enumerate(
+        zip(
+            pulse_list[good_pulse_bool],
+            channels_list[good_pulse_bool],
+            strict=True,
+        )
+    ):
+        pulse_index = np.arange(
+            peak - cutout_window_around_peak,
+            peak + cutout_window_around_peak,
         )
 
-    # Compute means of each group
-    log.info(f"Found a total of {len(grouped_peaks)} peaks")
+        pulse_array[i] = input_data[pulse_index, ch]
 
-    if len(grouped_peaks) == 0:
-        msg = "No peaks found in block, skipping."
-        log.debug(msg)
-        log.warning("No peaks detected")
-        return None
-
-    # output_data["all_pulses_groups"] = grouped_peaks
-    # output_data["all_channels_groups"] = grouped_channels
-
-    centers = [int(np.mean(g)) for g in grouped_peaks]
-
-    # For each peak group, compute & store waveform
-    peak_counter = 0
-    cutout_size = cutout_window_around_peak * 2
-    peak_array = np.full(
-        shape=(len(grouped_peaks), n_channels, cutout_size),
-        fill_value=np.nan,
-        dtype=np.float32,
-    )
-    channels_array = np.full(
-        shape=(len(grouped_peaks), n_channels), fill_value=False, dtype=bool
-    )
-    centers_array = np.full(
-        shape=(len(grouped_peaks),), fill_value=-1, dtype=np.int32
-    )
-    start_stop_index = np.full(
-        shape=(len(grouped_peaks), 2), fill_value=-1, dtype=np.int32
-    )
-
-    output_data["pulses"] = peak_array
-    output_data["channels"] = channels_array
-    output_data["centers"] = centers_array
-    output_data["start_stop_index"] = start_stop_index
-
-    log.info("Cutting out peaks")
-
-    for _, (pks, chans, center) in enumerate(
-        zip(grouped_peaks, grouped_channels, centers, strict=False)
-    ):
-        # Mark which channels contributed
-        chans = np.array(chans)
-        bool_channels = np.zeros(n_channels, dtype=bool)
-        bool_channels[chans] = True
-
-        start_stop_index = [
-            center - cutout_window_around_peak,
-            center + cutout_window_around_peak,
-        ]
-
-        if (start_stop_index[0] < 0) or (
-            start_stop_index[1] > input_data.shape[0]
-        ):
-            log.warning("Peak is too close to recording borders, skipping.")
-            continue
-
-        p = input_data[start_stop_index[0] : start_stop_index[1], :].T
-        if p.shape[1] != cutout_window_around_peak * 2:
-            log.critical("This is not supposed to happen")
-            continue
-
-        peak_counter += 1
-
-        # Correct to global time, not just block time
-        center = center + blockinfo["blockiterval"] * (
+        pulse_center[i] = peak + blockinfo["blockiterval"] * (
             blockinfo["blocksize"] - blockinfo["overlap"]
         )
 
         # Same for start/stop indices
-        start_stop_index = [
-            center - cutout_window_around_peak,
-            center + cutout_window_around_peak,
+        start_stop_index[i, :] = [
+            -cutout_window_around_peak + pulse_center[i],
+            cutout_window_around_peak + pulse_center[i],
         ]
 
-        output_data["pulses"][peak_counter - 1, :] = p
-        output_data["channels"][peak_counter - 1, :] = bool_channels
-        output_data["centers"][peak_counter - 1] = center
-        output_data["start_stop_index"][peak_counter - 1] = start_stop_index
+    output_data["pulses"] = pulse_array
+    output_data["channels"] = channels_list
+    output_data["centers"] = pulse_center
+    output_data["start_stop_index"] = start_stop_index
+
+    # TODO: Vectorize this
+    # pulse_array = input_data[:, channels_list][
+    #     peaks_list[:, np.newaxis]
+    # ] + np.arange(-cutout_window_around_peak, cutout_window_around_peak)
+
+    # NOTE: Take default Values if is None
+    # Convert config paramters from seconds to samples
+    # if not params.peaks.min_peak_distance_s:
+    #     min_peak_distance = int(
+    #         np.ceil(Params().peaks.min_peak_distance_s * rate)
+    #     )
+    # else:
+    #     min_peak_distance = int(
+    #         np.ceil(params.peaks.min_peak_distance_s * rate)
+    #     )
+
+    # # Group peaks across channels when they are close in time
+    # grouped_peaks, grouped_channels = group_peaks_across_channels_by_time(
+    #     peaks_list,
+    #     channels_list,
+    #     peak_window=min_peak_distance,
+    # )
+    #
+    # # output_data["all_pulses"] = grouped_peaks
+    # # output_data["all_channels"] = grouped_channels
+    #
+    # # Filter out groups that do not meet the threshold
+    # if not params.peaks.min_channels:
+    #     min_channels = Params().peaks.min_channels
+    # else:
+    #     min_channels = params.peaks.min_channels
+    #
+    # grouped_peaks, grouped_channels = filter_peak_groups_by_distance(
+    #     grouped_peaks,
+    #     grouped_channels,
+    #     params.sensoryarray,
+    # )
+    #
+    # if min_channels > 1:
+    #     grouped_peaks, grouped_channels = filter_peak_groups_by_count(
+    #         grouped_peaks,
+    #         grouped_channels,
+    #         min_channels_with_peaks=min_channels,
+    #     )
+    #
+    # # Compute means of each group
+    # log.info(f"Found a total of {len(grouped_peaks)} peaks")
+    #
+    # if len(grouped_peaks) == 0:
+    #     msg = "No peaks found in block, skipping."
+    #     log.debug(msg)
+    #     log.warning("No peaks detected")
+    #     return None
+    #
+    # # output_data["all_pulses_groups"] = grouped_peaks
+    # # output_data["all_channels_groups"] = grouped_channels
+    #
+    # centers = [int(np.mean(g)) for g in grouped_peaks]
+    #
+    # For each peak group, compute & store waveform
+    # peak_counter = 0
+    # channels_array = np.full(
+    #     shape=(len(grouped_peaks), n_channels), fill_value=False, dtype=bool
+    # )
+    # centers_array = np.full(
+    #     shape=(len(grouped_peaks),), fill_value=-1, dtype=np.int32
+    # )
+    # start_stop_index = np.full(
+    #     shape=(len(grouped_peaks), 2), fill_value=-1, dtype=np.int32
+    # )
+    #
+    # output_data["pulses"] = peak_array
+    # output_data["channels"] = channels_array
+    # output_data["centers"] = centers_array
+    # output_data["start_stop_index"] = start_stop_index
+    #
+    # log.info("Cutting out peaks")
+    #
+    # for _, (pks, chans, center) in enumerate(
+    #     zip(grouped_peaks, grouped_channels, centers, strict=False)
+    # ):
+    #     # Mark which channels contributed
+    #     chans = np.array(chans)
+    #     bool_channels = np.zeros(n_channels, dtype=bool)
+    #     bool_channels[chans] = True
+    #
+    #     start_stop_index = [
+    #         center - cutout_window_around_peak,
+    #         center + cutout_window_around_peak,
+    #     ]
+    #
+    #     if (start_stop_index[0] < 0) or (
+    #         start_stop_index[1] > input_data.shape[0]
+    #     ):
+    #         log.warning("Peak is too close to recording borders, skipping.")
+    #         continue
+    #
+    #     p = input_data[start_stop_index[0] : start_stop_index[1], :].T
+    #     if p.shape[1] != cutout_window_around_peak * 2:
+    #         log.critical("This is not supposed to happen")
+    #         continue
+    #
+    #     peak_counter += 1
+    #
+    #     # Correct to global time, not just block time
+    #     center = center + blockinfo["blockiterval"] * (
+    #         blockinfo["blocksize"] - blockinfo["overlap"]
+    #     )
+    #
+    #     # Same for start/stop indices
+    #     start_stop_index = [
+    #         center - cutout_window_around_peak,
+    #         center + cutout_window_around_peak,
+    #     ]
+    #
+    #     output_data["pulses"][peak_counter - 1, :] = p
+    #     output_data["channels"][peak_counter - 1, :] = bool_channels
+    #     output_data["centers"][peak_counter - 1] = center
+    #     output_data["start_stop_index"][peak_counter - 1] = start_stop_index
 
     return output_data
 
 
 def post_process_peaks_per_block(
-    peaks: dict, params: Params, blockinfo: dict
+    peaks: dict,
+    params: Params,
+    blockinfo: dict,
 ) -> dict:
     n_peaks = peaks["pulses"].shape[0]
     n_channels = peaks["pulses"].shape[1]
@@ -583,20 +631,26 @@ def post_process_peaks_per_block(
         peaks["pulses"] = new_peaks
         n_samples = params.resample.n_resamples
 
-    # Compute mean peaks
-    peaks["mean_pulses"] = np.full(
-        shape=(n_peaks, n_samples),
-        fill_value=np.nan,
-        dtype=peaks["pulses"].dtype,
-    )
-    log.debug("Computing mean pulses")
-    for i in range(len(peaks["pulses"])):
-        mean_peak = compute_mean_peak(
-            peaks["pulses"][i],
-            peaks["channels"][i],
-        )
-        peaks["mean_pulses"][i] = mean_peak
+    # TODO: PARM FOR Flipping
+    pulse_amplitude = peaks["pulses"][peaks["pulses"].shape[1] // 2]
+    sign = np.ones_like(peaks["pulse_center"])
+    sign[pulse_amplitude < 0] = -1
+    peaks["pulses"] = peaks["pulses"] * sign[:, np.newaxis]
 
+    # # Compute mean peaks
+    # peaks["mean_pulses"] = np.full(
+    #     shape=(n_peaks, n_samples),
+    #     fill_value=np.nan,
+    #     dtype=peaks["pulses"].dtype,
+    # )
+    # log.debug("Computing mean pulses")
+    # for i in range(len(peaks["pulses"])):
+    #     mean_peak = compute_mean_peak(
+    #         peaks["pulses"][i],
+    #         peaks["channels"][i],
+    #     )
+    #     peaks["mean_pulses"][i] = mean_peak
+    #
     return peaks
 
 
