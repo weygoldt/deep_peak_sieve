@@ -14,8 +14,8 @@ from thunderpulse.pulse_detection.config import (
     NotchParameters,
     Params,
     PeakDetectionParameters,
-    PrefilterParameters,
-    ResampleParameters,
+    PostProcessingParameters,
+    PreProcessingParameters,
     SavgolParameters,
 )
 from thunderpulse.pulse_detection.detection import (
@@ -97,9 +97,19 @@ def callbacks_traces(app):
                 "prominence": Input("num_findpeaks_prominence", "value"),
                 "width": Input("num_findpeaks_width", "value"),
             },
-            "resample": {
-                "enabled": Input("sw_resampling_enable", "value"),
+            "postprocessing_v": {
+                "enable_resampling": Input("sw_resampling_enable", "value"),
                 "n_resamples": Input("num_resampling_n", "value"),
+                "enable_centering": Input("sw_sample_centering", "value"),
+                "enable_sign_correction": Input(
+                    "sw_sample_sign_correction", "value"
+                ),
+                "centering_method": Input(
+                    "select_sample_centering_method", "value"
+                ),
+                "polarity": Input(
+                    "select_sample_sign_correction_polarity", "value"
+                ),
             },
         },
     )
@@ -112,7 +122,7 @@ def callbacks_traces(app):
         general_pulse,
         pulse,
         findpeaks,
-        resample,
+        postprocessing_v,
     ):
         (
             filepath,
@@ -135,7 +145,7 @@ def callbacks_traces(app):
         pre_filter["common_median_reference"] = bool(
             pre_filter["common_median_reference"]
         )
-        prefilter = PrefilterParameters(**pre_filter)
+        prefilter = PreProcessingParameters(**pre_filter)
 
         apply_filters_names = []
         apply_filters_params = []
@@ -156,12 +166,22 @@ def callbacks_traces(app):
 
         findpeaks = FindPeaksKwargs(**findpeaks)
         peaks = PeakDetectionParameters(**pulse, find_peaks_kwargs=findpeaks)
-        resample = ResampleParameters(**resample)
+
+        postprocessing_v["enable_resampling"] = bool(
+            postprocessing_v["enable_resampling"]
+        )
+        postprocessing_v["enable_sign_correction"] = bool(
+            postprocessing_v["enable_sign_correction"]
+        )
+        postprocessing_v["enable_centering"] = bool(
+            postprocessing_v["enable_centering"]
+        )
+        postprocessing = PostProcessingParameters(**postprocessing_v)
         params = Params(
             prefilter,
             filters,
             peaks,
-            resample,
+            postprocessing,
             sensoryarray=d.sensorarray,
             **general_pulse,
         )

@@ -2,9 +2,9 @@ import gc
 import sys
 from abc import abstractmethod
 from pathlib import Path
-import matplotlib.pyplot as plt
 from typing import Annotated
 
+import matplotlib.pyplot as plt
 import nixio
 import numpy as np
 import orjson
@@ -233,21 +233,20 @@ def main(
                     name = arr.name
                     bindices = np.zeros(arr.shape[0], dtype=bool)
                     bindices[indices] = True
-                    # TODO: This is super ugly but I did not find another working way
-                    if len(arr.shape) == 1:
-                        vals = arr[bindices]
-                    elif len(arr.shape) == 2:
-                        vals = arr[bindices, :]
-                    elif len(arr.shape) == 3:
-                        try:
-                            vals = arr[bindices, :, :]
-                        except Exception as e:
-                            embed()
-                            exit()
-                    else:
-                        msg = f"Array has unexpected shape: {arr.shape}"
-                        raise ValueError(msg)
-
+                    vals = arr[bindices]
+                    # # TODO: This is super ugly but I did not find another working way
+                    # if len(arr.shape) == 1:
+                    #     vals = arr[bindices]
+                    # elif len(arr.shape) == 3:
+                    #     try:
+                    #         vals = arr[bindices, :, :]
+                    #     except Exception as e:
+                    #         embed()
+                    #         exit()
+                    # else:
+                    #     msg = f"Array has unexpected shape: {arr.shape}"
+                    #     raise ValueError(msg)
+                    #
                     if i == 0:
                         data_array = sample_block.create_data_array(
                             name, "samples", data=vals
@@ -275,7 +274,7 @@ def main(
     )
 
     modelpath = outfile.parent
-    pulses = dataset.blocks[0].data_arrays["mean_pulses"][:]
+    pulses = dataset.blocks[0].data_arrays["pulses"][:]
     embedder = UmapEmbedder("umap", str(modelpath / "umap.joblib"))
     log.info("Fitting UMAP to the sampled data.")
     embedder.fit(pulses)

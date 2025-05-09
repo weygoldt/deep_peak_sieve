@@ -224,25 +224,6 @@ def create_pulse_offcanvas() -> dbc.Card:
                 dbc.Card(
                     [
                         dbc.CardHeader(
-                            "Note",
-                            className="card-title",
-                            id="h5_pulse_detection_parameters",
-                            style={"textAlign": "center"},
-                        ),
-                        dbc.CardBody(
-                            [
-                                html.P(
-                                    "After pulse detection, a mean waveform of the pulse is calculated using as many channels as the pulse simultaneously occured on. The following parameters govern how this mean waveform is calculated.",
-                                    id="h6_pulse_detection_note",
-                                )
-                            ]
-                        ),
-                    ]
-                ),
-                html.Br(),
-                dbc.Card(
-                    [
-                        dbc.CardHeader(
                             "Mean pulse post-processing parameters",
                             className="card-title",
                             id="h5_resample_parameters",
@@ -269,6 +250,8 @@ def create_pulse_offcanvas() -> dbc.Card:
                                                     ],
                                                     id="sw_resampling_enable",
                                                     switch=True,
+                                                    persistence=True,
+                                                    persistence_type="local",
                                                 ),
                                                 html.H6(
                                                     "Numbers to which the waveforms are resampled",
@@ -279,6 +262,68 @@ def create_pulse_offcanvas() -> dbc.Card:
                                                     placeholder="int",
                                                     id="num_resampling_n",
                                                     style={"width": "70%"},
+                                                    persistence=True,
+                                                    persistence_type="local",
+                                                ),
+                                                dbc.Checklist(
+                                                    options=[
+                                                        {
+                                                            "label": "Enable centering of pulses",
+                                                            "value": 0,
+                                                        }
+                                                    ],
+                                                    id="sw_sample_centering",
+                                                    switch=True,
+                                                    persistence=True,
+                                                    persistence_type="local",
+                                                ),
+                                                html.H6(
+                                                    "Centering method",
+                                                    id="h6_centering_method",
+                                                ),
+                                                dbc.Select(
+                                                    id="select_sample_centering_method",
+                                                    options=[
+                                                        {
+                                                            "label": "Max",
+                                                            "value": "max",
+                                                        },
+                                                        {
+                                                            "label": "Min",
+                                                            "value": "min",
+                                                        },
+                                                        {
+                                                            "label": "Max Diff",
+                                                            "value": "maxdiff",
+                                                        },
+                                                    ],
+                                                    persistence=True,
+                                                    persistence_type="local",
+                                                ),
+                                                dbc.Checklist(
+                                                    options=[
+                                                        {
+                                                            "label": "Sign Correction",
+                                                            "value": 0,
+                                                        }
+                                                    ],
+                                                    id="sw_sample_sign_correction",
+                                                    switch=True,
+                                                    persistence=True,
+                                                    persistence_type="local",
+                                                ),
+                                                dbc.Select(
+                                                    id="select_sample_sign_correction_polarity",
+                                                    options=[
+                                                        {
+                                                            "label": "Posistive",
+                                                            "value": "positive",
+                                                        },
+                                                        {
+                                                            "label": "Negative",
+                                                            "value": "negative",
+                                                        },
+                                                    ],
                                                     persistence=True,
                                                     persistence_type="local",
                                                 ),

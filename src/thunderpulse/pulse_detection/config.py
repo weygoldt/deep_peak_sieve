@@ -68,7 +68,7 @@ class FindPeaksKwargs(KwargsDataclass):
 
 
 @dataclass(slots=True)
-class PrefilterParameters(KwargsDataclass):
+class PreProcessingParameters(KwargsDataclass):
     """Apply Prefilter operations."""
 
     common_median_reference: bool = False
@@ -136,9 +136,10 @@ class FiltersParameters(KwargsDataclass):
 
 
 @dataclass
-class MeanPulseParameters(KwargsDataclass):
+class PostProcessingParameters(KwargsDataclass):
     enable_centering: bool = True
     enable_resampling: bool = True
+    enable_sign_correction: bool = True
     n_resamples: int = 512
     centering_method: CenteringMethod = "max"
     polarity: PulsePolarity = "positive"
@@ -160,14 +161,16 @@ class Params:
         Resampling settings.
     """
 
-    prefitering: PrefilterParameters = field(
-        default_factory=PrefilterParameters
+    preprocessing: PreProcessingParameters = field(
+        default_factory=PreProcessingParameters
     )
     filters: FiltersParameters = field(default_factory=FiltersParameters)
     peaks: PeakDetectionParameters = field(
         default_factory=PeakDetectionParameters
     )
-    resample: MeanPulseParameters = field(default_factory=MeanPulseParameters)
+    postprocessing: PostProcessingParameters = field(
+        default_factory=PostProcessingParameters
+    )
     sensoryarray: SensorArray = field(default_factory=SensorArray)
     buffersize_s: float = 60.0  # seconds
 
@@ -203,7 +206,7 @@ class Params:
                     **d["peaks"]["find_peaks_kwargs"]
                 ),
             ),
-            resample=MeanPulseParameters(**d["resample"]),
+            postprocessing=PostProcessingParameters(**d["postprocessing"]),
             buffersize_s=d["buffersize_s"],
             sensoryarray=SensorArray(
                 **{

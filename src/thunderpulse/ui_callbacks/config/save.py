@@ -13,8 +13,8 @@ from thunderpulse.pulse_detection.config import (
     NotchParameters,
     Params,
     PeakDetectionParameters,
-    PrefilterParameters,
-    ResampleParameters,
+    PostProcessingParameters,
+    PreProcessingParameters,
     SavgolParameters,
 )
 from thunderpulse.utils.check_config import check_config_params
@@ -40,12 +40,12 @@ def callbacks(app: Dash) -> None:
                 "lowcut": Input("num_bandpass_lowcutoff", "value"),
                 "highcut": Input("num_bandpass_highcutoff", "value"),
             },
-            "general_pulse": {
-                "buffersize_s": Input("num_pulse_buffersize", "value")
-            },
             "notch": {
                 "notch_freq": Input("num_notchfilter_freq", "value"),
                 "quality_factor": Input("num_notchfilter_quality", "value"),
+            },
+            "general_pulse": {
+                "buffersize_s": Input("num_pulse_buffersize", "value")
             },
             "pulse": {
                 "min_channels": Input("num_pulse_min_channels", "value"),
@@ -64,9 +64,19 @@ def callbacks(app: Dash) -> None:
                 "prominence": Input("num_findpeaks_prominence", "value"),
                 "width": Input("num_findpeaks_width", "value"),
             },
-            "resample": {
-                "enabled": Input("sw_resampling_enable", "value"),
+            "postprocessing_v": {
+                "enable_resampling": Input("sw_resampling_enable", "value"),
                 "n_resamples": Input("num_resampling_n", "value"),
+                "enable_centering": Input("sw_sample_centering", "value"),
+                "enable_sign_correction": Input(
+                    "sw_sample_sign_correction", "value"
+                ),
+                "centering_method": Input(
+                    "select_sample_centering_method", "value"
+                ),
+                "polarity": Input(
+                    "select_sample_sign_correction_polarity", "value"
+                ),
             },
         },
         prevent_initial_call=True,
@@ -80,7 +90,7 @@ def callbacks(app: Dash) -> None:
         general_pulse,
         pulse,
         findpeaks,
-        resample,
+        postprocessing_v,
     ) -> dict | None:
         button = ctx.triggered_id == "bt_save_config"
         if not button:
@@ -105,17 +115,33 @@ def callbacks(app: Dash) -> None:
                 apply_filters_params.append(f_params(**f_params_func))
                 apply_filters_names.append(f_name)
 
-        prefilter = PrefilterParameters(**pre_filter)
+        prefilter = PreProcessingParameters(**pre_filter)
 
         filters = FiltersParameters(
             filters=apply_filters_names, filter_params=apply_filters_params
         )
 
         findpeaks = FindPeaksKwargs(**findpeaks)
+
         peaks = PeakDetectionParameters(**pulse, find_peaks_kwargs=findpeaks)
-        resample = ResampleParameters(**resample)
+        postprocessing_v["enable_resampling"] = bool(
+            postprocessing_v["enable_resampling"]
+        )
+        postprocessing_v["enable_sign_correction"] = bool(
+            postprocessing_v["enable_sign_correction"]
+        )
+        postprocessing_v["enable_centering"] = bool(
+            postprocessing_v["enable_centering"]
+        )
+
+        postprocessing = PostProcessingParameters(**postprocessing_v)
         params = Params(
-            prefilter, filters, peaks, resample, d.sensorarray, **general_pulse
+            prefilter,
+            filters,
+            peaks,
+            postprocessing,
+            d.sensorarray,
+            **general_pulse,
         )
         current_parms = params.to_dict()
 
@@ -129,7 +155,6 @@ def callbacks(app: Dash) -> None:
 
         with open(save_path.with_suffix(".json"), "wb") as f:
             f.write(params.to_json())
-
 
 
 def create_metadata_from_dict(d, section: nixio.Section):

@@ -44,12 +44,13 @@ def callbacks_umap(app):
 
         d = load_data(**filepath)
 
-        save_path = list(
-            Path(d.paths.save_path).parent.glob("*pulses_samples.nix")
-        )[0]
-        if not save_path.exists:
+        save_path = list(Path(d.paths.save_path).glob("*pulses_samples*"))
+        save_file = [p for p in save_path if p.suffix in [".nix", ".h5"]][0]
+
+        if not save_file.exists:
             return default_umap_figure()
-        nix_file = nixio.File(str(save_path), nixio.FileMode.ReadOnly)
+        nix_file = nixio.File(str(save_file), nixio.FileMode.ReadOnly)
+
         block = nix_file.blocks[0]
         embedding = block.data_arrays["umap_embedding"]
 
@@ -105,16 +106,15 @@ def callbacks_umap(app):
 
         d = load_data(**filepath)
 
-        save_path = list(
-            Path(d.paths.save_path).parent.glob("*pulses_samples.nix")
-        )[0]
-        if not save_path.exists():
+        save_path = list(Path(d.paths.save_path).glob("*pulses_samples*"))
+        save_file = [p for p in save_path if p.suffix in [".nix", ".h5"]][0]
+        if not save_file.exists():
             return default_umap_figure()
 
-        nix_file = nixio.File(str(save_path), nixio.FileMode.ReadOnly)
+        nix_file = nixio.File(str(save_file), nixio.FileMode.ReadOnly)
         block = nix_file.blocks[0]
         pulse = block.data_arrays["pulses"]
-        mean_pulses = block.data_arrays["mean_pulses"]
+        # mean_pulses = block.data_arrays["mean_pulses"]
         channels = block.data_arrays["channels"]
 
         colors = px.colors.qualitative.Vivid[: len(current_umap_selections)]
@@ -181,7 +181,7 @@ def callbacks_umap(app):
                 ]
 
                 std_upper, std_lower, mean_wf = calc_mean_wavforms_from_umap(
-                    mean_pulses,
+                    pulse,
                     # channels,
                     data_frame,
                     d.metadata.samplerate,
@@ -201,7 +201,7 @@ def callbacks_umap(app):
                     std_upper,
                     mean_wf,
                     d.metadata.samplerate,
-                    mean_pulses[index, :],
+                    pulse[index, :],
                     color1=colors[i],
                     color2="grey",
                 )
