@@ -232,7 +232,7 @@ def create_pulse_offcanvas() -> dbc.Card:
                         dbc.CardBody(
                             [
                                 dbc.Button(
-                                    "Resample",
+                                    "Post-processing parameters",
                                     color="info",
                                     id="bt_toggle_resample_params",
                                     n_clicks=0,
@@ -262,6 +262,18 @@ def create_pulse_offcanvas() -> dbc.Card:
                                                     placeholder="int",
                                                     id="num_resampling_n",
                                                     style={"width": "70%"},
+                                                    persistence=True,
+                                                    persistence_type="local",
+                                                ),
+                                                dbc.Checklist(
+                                                    options=[
+                                                        {
+                                                            "label": "Enable normalization of waveforms [0-1]",
+                                                            "value": 0,
+                                                        }
+                                                    ],
+                                                    id="sw_normalization_enable",
+                                                    switch=True,
                                                     persistence=True,
                                                     persistence_type="local",
                                                 ),

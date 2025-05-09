@@ -67,6 +67,9 @@ def callbacks(app: Dash) -> None:
             "postprocessing_v": {
                 "enable_resampling": Input("sw_resampling_enable", "value"),
                 "n_resamples": Input("num_resampling_n", "value"),
+                "enable_normalization": Input(
+                    "sw_normalization_enable", "value"
+                ),
                 "enable_centering": Input("sw_sample_centering", "value"),
                 "enable_sign_correction": Input(
                     "sw_sample_sign_correction", "value"
@@ -132,6 +135,9 @@ def callbacks(app: Dash) -> None:
         )
         postprocessing_v["enable_centering"] = bool(
             postprocessing_v["enable_centering"]
+        )
+        postprocessing_v["enable_normalization"] = bool(
+            postprocessing_v["enable_normalization"]
         )
 
         postprocessing = PostProcessingParameters(**postprocessing_v)

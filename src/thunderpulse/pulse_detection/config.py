@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from IPython import embed
 import numpy as np
 import orjson
 
@@ -140,6 +141,7 @@ class PostProcessingParameters(KwargsDataclass):
     enable_centering: bool = True
     enable_resampling: bool = True
     enable_sign_correction: bool = True
+    enable_normalization: bool = True
     n_resamples: int = 512
     centering_method: CenteringMethod = "max"
     polarity: PulsePolarity = "positive"
@@ -225,6 +227,7 @@ class Params:
         """De-serialise from JSON string."""
         with open(s) as f:
             json_file = json.loads(f.read())
+
         return cls.from_dict(json_file)
 
 

@@ -158,8 +158,6 @@ def detect_peaks(
             )
             raise TypeError(msg)
 
-        print(f"Peak parameter {key}: {peak_params[key]}")
-
     # Detect peaks on each channel
     for ch in range(block.shape[1]):
         signal = block[:, ch]
@@ -180,46 +178,6 @@ def detect_peaks(
         channels_list.append(np.full_like(peaks, ch, dtype=np.int32))
 
     return np.concatenate(peaks_list), np.concatenate(channels_list)
-
-
-def compute_mean_peak(
-    peak: np.ndarray,
-    channels: np.ndarray,
-) -> np.ndarray:
-    """Given a filtered block, a center index, and the channels that had peaks,
-    return a normalized mean-peak waveform across those channels.
-    """
-
-    peak = peak[channels, :]
-
-    # Pull each channel baseline to zero
-    baseline_window = peak.shape[-1] // 4
-    baselines = np.mean(peak[:, :baseline_window], axis=-1)
-    peak -= baselines.reshape(-1, 1)
-
-    # Extract sign of strongest deviation
-    signs = np.array([1 if s[np.argmax(np.abs(s))] > 0 else -1 for s in peak])
-
-    # Flip sign according to majority polarity
-    # TODO: This does not work sometimes, maybe due to noise? For single peak pulses
-    # this works well but for multiphase peaks we should check the order of signs
-    # of each single peak instead of the maximum because the maximum is subject to noise
-
-    if np.all(signs > 0):
-        log.debug("All peaks are positive")
-        mean_peak = np.mean(peak, axis=0)
-    elif np.all(signs < 0):
-        log.debug("All peaks are negative")
-        mean_peak = -np.mean(peak, axis=0)
-    else:
-        log.debug("Peaks are mixed, flipping signs")
-        mean_peak = np.mean(peak * signs.reshape(-1, 1), axis=0)
-
-    # Pull the combined baseline to zero again
-    start_baseline = np.mean(mean_peak[:baseline_window])
-    mean_peak -= start_baseline
-
-    return mean_peak
 
 
 def detect_peaks_on_block(
@@ -253,6 +211,7 @@ def detect_peaks_on_block(
 
     cutout_size = cutout_window_around_peak * 2
 
+    # Find out where our window overlaps the edge of the block
     bad_pulse = np.where(
         (pulse_list - cutout_window_around_peak < 0)
         | (pulse_list + cutout_window_around_peak > input_data.shape[0])
@@ -260,19 +219,18 @@ def detect_peaks_on_block(
     good_pulse_bool = np.ones_like(pulse_list, dtype=bool)
     good_pulse_bool[bad_pulse] = False
 
+    # Remove the pulses where the window would overlap the edge of the block
+    pulse_list = pulse_list[good_pulse_bool]
+    channels_list = channels_list[good_pulse_bool]
+
     start_stop_index = np.full(
         shape=(len(pulse_list), 2), fill_value=-1, dtype=np.int32
     )
     pulse_center = np.zeros_like(pulse_list)
-
     pulse_array = np.zeros((pulse_list.shape[0], cutout_size))
 
     for i, (peak, ch) in enumerate(
-        zip(
-            pulse_list[good_pulse_bool],
-            channels_list[good_pulse_bool],
-            strict=True,
-        )
+        zip(pulse_list, channels_list, strict=True)
     ):
         pulse_index = np.arange(
             peak - cutout_window_around_peak,
@@ -280,7 +238,6 @@ def detect_peaks_on_block(
         )
 
         pulse_array[i] = block_filtered[pulse_index, ch]
-
         pulse_center[i] = peak + blockinfo["blockiterval"] * (
             blockinfo["blocksize"] - blockinfo["overlap"]
         )
@@ -322,6 +279,7 @@ def post_process_peaks_per_block(
 ) -> dict:
     n_peaks = peaks["pulses"].shape[0]
     n_samples = peaks["pulses"].shape[1]
+    new_peaks = peaks["pulses"].copy()
 
     # Interpolate raw peak snippets
     # TODO: DATATYOE TO INT
@@ -333,36 +291,46 @@ def post_process_peaks_per_block(
             fill_value=np.nan,
             dtype=peaks["pulses"].dtype,
         )
-
         for i in range(n_peaks):
             x = np.linspace(0, n_samples, n_samples)
             xnew = np.linspace(0, n_samples, params.postprocessing.n_resamples)
             f = interp1d(x, peaks["pulses"][i], kind="cubic")
             new_peaks[i] = f(xnew)
 
-        peaks["pulses"] = new_peaks
-        n_samples = params.postprocessing.n_resamples
-
     # TODO: PARM FOR Flipping
     if params.postprocessing.enable_sign_correction:
-        pulse_amplitude = peaks["pulses"][:, peaks["pulses"].shape[1] // 2]
-        sign = np.ones_like(peaks["centers"])
-        sign[pulse_amplitude < 0] = -1
+        log.debug("Correcting sign of peak snippets")
+        pulse_amplitude = new_peaks[:, new_peaks.shape[1] // 2]
+        sign = np.ones_like(new_peaks)
+        sign[pulse_amplitude < 0, :] = -1
         if params.postprocessing.polarity == "negative":
-            sign = sign * -1
-        peaks["pulses"] = peaks["pulses"] * sign[:, np.newaxis]
+            sign *= -1
+        new_peaks = new_peaks * sign
+
+    if params.postprocessing.enable_normalization:
+        log.debug("Normalizing peak snippets")
+        # Normalize peak snippets
+        norm = np.max(new_peaks, axis=1)
+        new_peaks = new_peaks / norm[:, np.newaxis]
 
     if params.postprocessing.enable_centering:
+        log.debug("Re-centering peak snippets")
         if params.postprocessing.centering_method in ["min", "max"]:
-            for i, p in enumerate(peaks["pulses"]):
+            for i, p in enumerate(new_peaks):
                 peak_index = np.argmax(np.abs(p))
                 diff_center = peak_index - p.shape[0] // 2
                 center_peak = np.roll(p, diff_center)
                 tukey_window = tukey(p.shape[0], 0.50)
-                peaks["pulses"][i] = center_peak * tukey_window
+                new_peaks[i] = center_peak * tukey_window
         else:
             raise NotImplementedError()
 
+    if np.any(np.isnan(new_peaks)):
+        msg = "NaN values in peak snippets"
+        embed()
+        exit()
+
+    peaks["pulses"] = new_peaks
     return peaks
 
 
@@ -370,7 +338,7 @@ def process_dataset(
     data: Data,
     params: Params,
     output_path: Path,
-) -> None:
+) -> int:
     if data.metadata.samplerate is None:
         msg = "Data rate is None, cannot process file."
         raise ValueError(msg)
@@ -384,6 +352,7 @@ def process_dataset(
         name="pulses.nix", type_="ThunderPulse.pulses"
     )
 
+    n_pulses = 0
     num_blocks = int(np.ceil(data.metadata.frames / (blocksize - overlap)))
     # with get_progress() as pbar:
     #     desc = "Processing file"
@@ -411,6 +380,7 @@ def process_dataset(
         block_peaks = post_process_peaks_per_block(
             block_peaks, params, blockinfo
         )
+        n_pulses += block_peaks["pulses"].shape[0]
         if blockiterval == 0:
             # Initialize dataset
             for key, value in block_peaks.items():
@@ -418,7 +388,6 @@ def process_dataset(
                     data_array = nix_block.create_data_array(
                         key, f"thunderpulse.{key}", data=value
                     )
-                    print(f"Created Data array {data_array.name}")
                 except ValueError:
                     embed()
                     exit()
@@ -432,12 +401,12 @@ def process_dataset(
                     data_array = nix_block.create_data_array(
                         key, f"thunderpulse.{key}", data=value
                     )
-                    print(f"Created Data array {data_array.name}")
 
         # pbar.update(task, advance=1)
 
         gc.collect()  # TODO: Check if this has actually an effect
     nix_file.close()
+    return n_pulses
 
 
 @app.command()
@@ -469,7 +438,7 @@ def main(
     savepath.mkdir(parents=True, exist_ok=True)
 
     possible_sensor_layout_names = ["electrode_layout.json", "probe.prb"]
-    config_path = datapath / "config.json"
+    config_path = datapath.parent / "config.json"
     # TODO: add probe path
 
     if not config_path.exists():
@@ -513,8 +482,9 @@ def main(
             continue
 
         log.info(f"Processing file: {recording_path}")
-        process_dataset(
+        n_pulses = process_dataset(
             data,
             params=params,
             output_path=outfile_path,
         )
+        log.info(f"Detected {n_pulses} pulses on {recording_path}")

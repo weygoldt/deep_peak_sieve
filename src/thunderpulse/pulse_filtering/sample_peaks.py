@@ -24,6 +24,8 @@ from thunderpulse.utils.loggers import (
 app = typer.Typer(pretty_exceptions_show_locals=False)
 log = get_logger(__name__)
 
+np.random.seed(42)
+
 
 """
 The ABC is a placeholder for more complicated sampling schemes. The current 
@@ -277,6 +279,7 @@ def main(
     pulses = dataset.blocks[0].data_arrays["pulses"][:]
     embedder = UmapEmbedder("umap", str(modelpath / "umap.joblib"))
     log.info("Fitting UMAP to the sampled data.")
+
     embedder.fit(pulses)
     log.info("Predicting UMAP embedding for the sampled data.")
     yhat = embedder.predict(pulses)
