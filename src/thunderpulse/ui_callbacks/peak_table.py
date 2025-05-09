@@ -15,11 +15,11 @@ def callbacks(app):
         Input("peak_storage", "data"),
     )
     def update_peak_table(page_current, page_size, sort_by, peaks_storage):
-        if not peaks_storage:
+        if not peaks_storage or len(peaks_storage["pulses"]) < 1:
             return None, None, None
 
         peaks_storage.pop("pulses")
-        peaks_storage.pop("channels")
+        # peaks_storage.pop("channels")
 
         starts = np.array(peaks_storage["start_stop_index"])[:, 0]
         stops = np.array(peaks_storage["start_stop_index"])[:, 1]
