@@ -111,10 +111,10 @@ def callbacks_umap(app):
         if not save_path.exists():
             return default_umap_figure()
 
-        embed()
         nix_file = nixio.File(str(save_path), nixio.FileMode.ReadOnly)
         block = nix_file.blocks[0]
         pulse = block.data_arrays["pulses"]
+        mean_pulses = block.data_arrays["mean_pulses"]
         channels = block.data_arrays["channels"]
 
         colors = px.colors.qualitative.Vivid[: len(current_umap_selections)]
@@ -161,14 +161,17 @@ def callbacks_umap(app):
                 std_upper = saved_selections[key]["std_upper"]
                 std_lower = saved_selections[key]["std_lower"]
                 mean_wf = saved_selections[key]["mean_wf"]
-                fig = plot_mean_waveforms_from_umap(
-                    fig,
-                    std_lower,
-                    std_upper,
-                    mean_wf,
-                    d.metadata.samplerate,
-                    color=colors[i],
-                )
+                # fig = plot_mean_waveforms_from_umap(
+                #     fig,
+                #     std_lower,
+                #     std_upper,
+                #     mean_wf,
+                #     mean_pulses[
+                #     d.metadata.samplerate,
+                #     color1=colors[i],
+                #     color2="grey",
+                #
+                # )
             else:
                 poly = Polygon(current_selection)
                 data_frame = [
@@ -178,8 +181,8 @@ def callbacks_umap(app):
                 ]
 
                 std_upper, std_lower, mean_wf = calc_mean_wavforms_from_umap(
-                    pulse,
-                    channels,
+                    mean_pulses,
+                    # channels,
                     data_frame,
                     d.metadata.samplerate,
                 )
@@ -191,13 +194,16 @@ def callbacks_umap(app):
                 saved_selections[key]["std_upper"] = std_upper
                 saved_selections[key]["std_lower"] = std_lower
                 saved_selections[key]["mean_wf"] = mean_wf
+                index = np.sort([d["pointIndex"] for d in data_frame])
                 fig = plot_mean_waveforms_from_umap(
                     fig,
                     std_lower,
                     std_upper,
                     mean_wf,
                     d.metadata.samplerate,
-                    color=colors[i],
+                    mean_pulses[index, :],
+                    color1=colors[i],
+                    color2="grey",
                 )
 
         fig.update_layout(
@@ -383,19 +389,32 @@ def callbacks_umap(app):
 #     return fig
 #
 #
-def calc_mean_wavforms_from_umap(pulses, channels, data, sample_rate):
+def calc_mean_wavforms_from_umap(pulses, data, sample_rate):
     index = np.sort([d["pointIndex"] for d in data])
-    mean_wf = np.mean(pulses[index][channels[index]], axis=0)
-    std_wf = np.std(pulses[index][channels[index]], axis=0)
+    # mean_wf = np.mean(pulses[index][channels[index]], axis=0)
+    # std_wf = np.std(pulses[index][channels[index]], axis=0)
+    mean_wf = np.mean(pulses[index], axis=0)
+    std_wf = np.std(pulses[index], axis=0)
     upper = mean_wf + std_wf
     low = mean_wf - std_wf
     return upper, low, mean_wf
 
 
 def plot_mean_waveforms_from_umap(
-    fig, low, upper, mean_wf, sample_rate, color
+    fig, low, upper, mean_wf, sample_rate, mean_pulses, color1, color2
 ):
     time_slice = np.arange(mean_wf.shape[0]) / sample_rate
+    for p in mean_pulses:
+        fig.add_trace(
+            go.Scattergl(
+                x=time_slice,
+                y=p,
+                mode="lines",
+                marker_color=color2,
+                showlegend=False,
+                opacity=0.2,
+            ),
+        )
     fig.add_trace(
         go.Scattergl(
             name="upper",
@@ -404,7 +423,7 @@ def plot_mean_waveforms_from_umap(
             mode="lines",
             showlegend=False,
             fill="toself",
-            marker_color=color,
+            marker_color=color1,
             opacity=0.8,
         )
     )
@@ -413,7 +432,7 @@ def plot_mean_waveforms_from_umap(
             x=time_slice,
             y=mean_wf,
             mode="lines",
-            marker_color=color,
+            marker_color=color1,
         ),
     )
 

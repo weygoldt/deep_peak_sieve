@@ -211,7 +211,26 @@ def create_pulse_offcanvas() -> dbc.Card:
                 dbc.Card(
                     [
                         dbc.CardHeader(
-                            "Resample parameters",
+                            "Note",
+                            className="card-title",
+                            id="h5_pulse_detection_parameters",
+                            style={"textAlign": "center"},
+                        ),
+                        dbc.CardBody(
+                            [
+                                html.P(
+                                    "After pulse detection, a mean waveform of the pulse is calculated using as many channels as the pulse simultaneously occured on. The following parameters govern how this mean waveform is calculated.",
+                                    id="h6_pulse_detection_note",
+                                )
+                            ]
+                        ),
+                    ]
+                ),
+                html.Br(),
+                dbc.Card(
+                    [
+                        dbc.CardHeader(
+                            "Mean pulse post-processing parameters",
                             className="card-title",
                             id="h5_resample_parameters",
                             style={"textAlign": "center"},

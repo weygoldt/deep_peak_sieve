@@ -597,6 +597,18 @@ def post_process_peaks_per_block(
         )
         peaks["mean_pulses"][i] = mean_peak
 
+    # TODO: Add option to normalize mean peaks between 0 and 1 or not
+    # And add option to center the peak in the window using different methods
+    # (max), max derivative, etc.
+
+    # Normalize mean peaks
+    if params.normalize.enabled:
+        log.debug("Normalizing mean pulses")
+        for i in range(len(peaks["mean_pulses"])):
+            peaks["mean_pulses"][i] = peaks["mean_pulses"][i] / np.max(
+                np.abs(peaks["mean_pulses"][i])
+            )
+
     return peaks
 
 

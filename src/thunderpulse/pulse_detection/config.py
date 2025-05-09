@@ -5,7 +5,7 @@ import sys
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import orjson
@@ -18,6 +18,9 @@ from thunderpulse.dsp.filters import (
 )
 
 _INDENT = 2
+
+CenteringMethod = Literal["max", "min", "max_diff"]
+PulsePolarity = Literal["positive", "negative"]
 
 
 @dataclass(slots=True)
@@ -133,12 +136,12 @@ class FiltersParameters(KwargsDataclass):
 
 
 @dataclass
-class ResampleParameters(KwargsDataclass):
-    """Zero-hold / FFT resampling settings."""
-
-    centering: bool = True
-    enabled: bool = True
+class MeanPulseParameters(KwargsDataclass):
+    enable_centering: bool = True
+    enable_resampling: bool = True
     n_resamples: int = 512
+    centering_method: CenteringMethod = "max"
+    polarity: PulsePolarity = "positive"
 
 
 # root config
@@ -164,7 +167,7 @@ class Params:
     peaks: PeakDetectionParameters = field(
         default_factory=PeakDetectionParameters
     )
-    resample: ResampleParameters = field(default_factory=ResampleParameters)
+    resample: MeanPulseParameters = field(default_factory=MeanPulseParameters)
     sensoryarray: SensorArray = field(default_factory=SensorArray)
     buffersize_s: float = 60.0  # seconds
 
@@ -200,7 +203,7 @@ class Params:
                     **d["peaks"]["find_peaks_kwargs"]
                 ),
             ),
-            resample=ResampleParameters(**d["resample"]),
+            resample=MeanPulseParameters(**d["resample"]),
             buffersize_s=d["buffersize_s"],
             sensoryarray=SensorArray(
                 **{
