@@ -143,7 +143,7 @@ def detect_peaks(
     # Convert parameters from seconds to samples
     for key, value in peak_params.items():
         # Select only the parameters that are x-axis related
-        if not key in ["width", "distance"]:
+        if key not in ["width", "distance"]:
             continue
         if isinstance(value, Iterable) and not isinstance(value, str):
             peak_params[key] = [x / rate for x in value]
@@ -157,6 +157,9 @@ def detect_peaks(
                 f"single number. Got {type(value)} for key {key}."
             )
             raise TypeError(msg)
+
+        if key == "distance":
+            print(f"Distance: {peak_params[key]}")
 
     # Detect peaks on each channel
     for ch in range(block.shape[1]):
