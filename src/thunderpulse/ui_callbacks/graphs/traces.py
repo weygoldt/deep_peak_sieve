@@ -266,12 +266,13 @@ def callbacks_traces(app):
                     #     row=i,
                     #     col=[1] * channel_length,
                     # )
-
+                    pulses = output["centers"][output["channels"] == ch]
+                    
                     fig.add_trace(
                         go.Scattergl(
-                            x=output["centers"] / d.metadata.samplerate
+                            x=pulses/ d.metadata.samplerate
                             + time_slice[0],
-                            y=sliced_data[output["centers"], ch],
+                            y=sliced_data[pulses, ch],
                             mode="markers",
                             marker_symbol="arrow",
                             marker_color="red",
