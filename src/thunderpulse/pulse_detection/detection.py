@@ -15,6 +15,7 @@ import numpy as np
 import typer
 from IPython import embed
 from nixio.util import check_entity_type
+from sklearn.cluster import DBSCAN
 from scipy.interpolate import interp1d
 from scipy.signal import find_peaks
 from scipy.signal.windows import tukey
@@ -186,6 +187,20 @@ def detect_peaks(
     return np.concatenate(peaks_list), np.concatenate(channels_list)
 
 
+def make_custom_metric(time_thresh, min_channel_diff, max_channel_diff):
+    def custom_metric(a, b):
+        time_diff = abs(a[0] - b[0])
+        channel_diff = abs(a[1] - b[1])
+        if (
+            time_diff <= time_thresh
+            and min_channel_diff <= channel_diff <= max_channel_diff
+        ):
+            return 0
+        return 1
+
+    return custom_metric
+
+
 def detect_peaks_on_block(
     input_data: np.ndarray,
     rate: float,
@@ -205,6 +220,13 @@ def detect_peaks_on_block(
         mode=params.peaks.mode,
         find_peaks_kwargs=params.peaks.find_peaks_kwargs,
     )
+    pulse_channel = np.stack((pulse_list, channels_list)).T
+    index =np.argsort(pulse_channel[:, 0])
+    custom_metric = make_custom_metric(30, 0, 5)
+
+    clustering = DBSCAN(eps=0.5, min_samples=1, metric=custom_metric)
+    labels = clustering.fit_predict(pulse_channel[index])
+
 
     if not params.peaks.cutout_window_around_peak_s:
         cutout_window_around_peak = int(
