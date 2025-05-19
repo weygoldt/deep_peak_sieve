@@ -72,6 +72,7 @@ def main(
                                         children="Traces",
                                         style={"textAlign": "center"},
                                     ),
+                                    dcc.Store(id="pulse_detection_config"),
                                     visualization_tabs,
                                     dcc.Store(id="store_umap_selection"),
                                     time_slider,
@@ -96,6 +97,8 @@ def main(
     ui_callbacks.config.load.callbacks(app)
     ui_callbacks.config.save.callbacks(app)
 
+
+    ui_callbacks.pulse_detection_config.callbacks(app)
     ui_callbacks.channel_slider.callbacks(app)
     ui_callbacks.time_slider.callbacks(app)
 
