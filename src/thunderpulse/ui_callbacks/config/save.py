@@ -52,8 +52,6 @@ def callbacks(app: Dash) -> None:
             "pulse_detection_config", "thunderpulse.pulse_detection.config"
         )
         create_metadata_from_dict(current_parms, sec)
-        embed()
-
         file.close()
 
         with open(save_path.with_suffix(".json"), "wb") as f:
