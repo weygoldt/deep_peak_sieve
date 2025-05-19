@@ -46,18 +46,25 @@ class SensorArray:
     z : z-positions
     """
 
-    ids: npt.NDArray[np.int16] = field(
+    ids: npt.NDArray[np.int16] | list = field(
         default_factory=lambda: np.arange(15, dtype=np.int16)
     )
-    x: npt.NDArray[np.float32] = field(
+    x: npt.NDArray[np.float32] | list = field(
         default_factory=lambda: np.arange(15, dtype=np.float32)
     )
-    y: npt.NDArray[np.float32] = field(
+    y: npt.NDArray[np.float32] | list = field(
         default_factory=lambda: np.arange(15, dtype=np.float32)
     )
-    z: npt.NDArray[np.float32] = field(
+    z: npt.NDArray[np.float32] | list = field(
         default_factory=lambda: np.arange(15, dtype=np.float32)
     )
+
+    def to_numpy(self):
+        """Convert all fields to numpy arrays in-place."""
+        self.ids = np.array(self.ids)
+        self.x = np.array(self.x)
+        self.y = np.array(self.y)
+        self.z = np.array(self.z)
 
 
 @dataclass
