@@ -1,11 +1,11 @@
 """Main loop to parse large datasets and collect pulses."""
 
-from functools import cache
 import gc
 import logging
 import re
 import sys
 from datetime import timedelta
+from functools import cache
 from pathlib import Path
 from time import time
 from typing import Annotated, Iterable
@@ -424,52 +424,26 @@ def detect_peaks_on_block(
     channels_list = channels_list[good_pulse_bool]
     group_labels = labels[good_pulse_bool]
 
-    start_stop_index = np.full(
-        shape=(len(pulse_list), 2), fill_value=-1, dtype=np.int32
+    window = np.arange(-cutout_window_around_peak, cutout_window_around_peak)
+    pulse_indices = pulse_list[:, np.newaxis] + window[np.newaxis, :]
+    channel_indices = channels_list[:, np.newaxis]
+    pulse_array = block_filtered[pulse_indices, channel_indices]
+    pulse_center = pulse_list + blockinfo["blockiterval"] * (
+        blockinfo["blocksize"] - blockinfo["overlap"]
     )
-    pulse_center = np.zeros_like(pulse_list)
-    pulse_array = np.zeros((pulse_list.shape[0], cutout_size))
-
-    for i, (peak, ch) in enumerate(
-        zip(pulse_list, channels_list, strict=True)
-    ):
-        pulse_index = np.arange(
-            peak - cutout_window_around_peak,
-            peak + cutout_window_around_peak,
-        )
-
-        pulse_array[i] = block_filtered[pulse_index, ch]
-        pulse_center[i] = peak + blockinfo["blockiterval"] * (
-            blockinfo["blocksize"] - blockinfo["overlap"]
-        )
-
-        # Same for start/stop indices
-        start_stop_index[i, :] = [
-            -cutout_window_around_peak + pulse_center[i],
-            cutout_window_around_peak + pulse_center[i],
-        ]
+    start_stop_index = np.stack(
+        [
+            pulse_center - cutout_window_around_peak,
+            pulse_center + cutout_window_around_peak,
+        ],
+        axis=1,
+    )
 
     output_data["pulses"] = pulse_array
     output_data["channels"] = channels_list
     output_data["centers"] = pulse_center
     output_data["start_stop_index"] = start_stop_index
     output_data["groub"] = group_labels
-
-    # TODO: Vectorize this
-    # pulse_array = input_data[:, channels_list][
-    #     peaks_list[:, np.newaxis]
-    # ] + np.arange(-cutout_window_around_peak, cutout_window_around_peak)
-
-    # NOTE: Take default Values if is None
-    # Convert config paramters from seconds to samples
-    # if not params.peaks.min_peak_distance_s:
-    #     min_peak_distance = int(
-    #         np.ceil(Params().peaks.min_peak_distance_s * rate)
-    #     )
-    # else:
-    #     min_peak_distance = int(
-    #         np.ceil(params.peaks.min_peak_distance_s * rate)
-    #     )
 
     return output_data
 
