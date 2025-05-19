@@ -7,9 +7,9 @@ from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from IPython import embed
 import numpy as np
 import orjson
+from IPython import embed
 
 from thunderpulse.data_handling.data import SensorArray
 from thunderpulse.dsp.filters import (
@@ -109,6 +109,7 @@ class PeakDetectionParameters(KwargsDataclass):
     mode: str = "both"  # 'peak', 'trough', 'both'
     min_peak_distance_s: float = 0.001  # seconds
     cutout_window_around_peak_s: float = 0.005  # seconds
+    distance_channels: float = 50 # distance unit sensoryarray
 
     find_peaks_kwargs: FindPeaksKwargs = field(
         default_factory=lambda: FindPeaksKwargs(height=0.001)
