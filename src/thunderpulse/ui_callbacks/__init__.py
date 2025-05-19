@@ -5,6 +5,7 @@ from . import (
     graphs,
     keyboard_shortcuts,
     peak_table,
+    pulse_detection_config,
     save_processing,
     time_slider,
     waveforms,
