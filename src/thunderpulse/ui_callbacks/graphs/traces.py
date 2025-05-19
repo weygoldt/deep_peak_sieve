@@ -1,4 +1,5 @@
 import numpy as np
+import plotly.colors
 import plotly.express as px
 import plotly.graph_objects as go
 from dash import Input, Output
@@ -89,6 +90,7 @@ def callbacks_traces(app):
                 "cutout_window_around_peak_s": Input(
                     "num_pulse_waveform", "value"
                 ),
+                "distance_channels": Input("num_pulse_distance", "value"),
             },
             "findpeaks": {
                 "height": Input("num_findpeaks_height", "value"),
@@ -201,7 +203,6 @@ def callbacks_traces(app):
             d.data, time_index, time_display, d.metadata.samplerate
         )
         index_time_start = int(time_slice[0] * d.metadata.samplerate)
-
         sliced_data = apply_filters(sliced_data, d.metadata.samplerate, params)
 
         colors = [*px.colors.qualitative.Light24, *px.colors.qualitative.Vivid]
@@ -241,47 +242,48 @@ def callbacks_traces(app):
             )
 
             if output:
+                unique_groups = sorted(set(output["groub"]))
+                color_set = plotly.colors.qualitative.D3
+                n_colors = len(color_set)
+                group_to_color = {
+                    group: color_set[i % n_colors]
+                    for i, group in enumerate(unique_groups)
+                }
                 for i, ch in enumerate(channels, start=1):
-                    # pulse_channel_index = np.where(ch == output["channels"])
-                    # channel_peaks = output["centers"][
-                    #     output["channels"][:, ch]
-                    # ]
-                    # all_channels_index = np.where(
-                    #     np.concatenate(output["all_channels"]) == ch
-                    # )
-                    # all_pulses = np.concatenate(output["all_pulses"])[
-                    #     all_channels_index
-                    # ]
-                    # fig.add_trace(
-                    #     go.Scattergl(
-                    #         x=(all_pulses + 1) / d.metadata.samplerate
-                    #         + time_slice[0],
-                    #         y=sliced_data[all_pulses, ch],
-                    #         mode="markers",
-                    #         marker_symbol="arrow",
-                    #         marker_color="blue",
-                    #         marker_size=10,
-                    #         name=f"Peaks {ch}",
-                    #     ),
-                    #     row=i,
-                    #     col=[1] * channel_length,
-                    # )
-                    pulses = output["centers"][output["channels"] == ch]
-                    
+                    pulse_index = output["channels"] == ch
+                    pulses = output["centers"][pulse_index]
+                    groubs = output["groub"][pulse_index]
+                    pulse_colors = [group_to_color[g] for g in groubs]
                     fig.add_trace(
                         go.Scattergl(
-                            x=pulses/ d.metadata.samplerate
-                            + time_slice[0],
+                            x=pulses / d.metadata.samplerate + time_slice[0],
                             y=sliced_data[pulses, ch],
                             mode="markers",
                             marker_symbol="arrow",
-                            marker_color="red",
+                            marker_color=pulse_colors,
                             marker_size=10,
                             name=f"Peaks {ch}",
                         ),
                         row=i,
                         col=[1] * channel_length,
                     )
+                #
+                # for i, ch in enumerate(channels, start=1):
+                #     pulses = output["centers"][output["channels"] == ch]
+                #
+                #     fig.add_trace(
+                #         go.Scattergl(
+                #             x=pulses / d.metadata.samplerate + time_slice[0],
+                #             y=sliced_data[pulses, ch],
+                #             mode="markers",
+                #             marker_symbol="arrow",
+                #             marker_color="red",
+                #             marker_size=10,
+                #             name=f"Peaks {ch}",
+                #         ),
+                #         row=i,
+                #         col=[1] * channel_length,
+                #     )
             peaks = output
 
         fig.update_layout(
