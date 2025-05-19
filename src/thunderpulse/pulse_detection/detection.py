@@ -1,11 +1,13 @@
 """Main loop to parse large datasets and collect pulses."""
 
+from functools import cache
 import gc
 import logging
 import re
 import sys
 from datetime import timedelta
 from pathlib import Path
+from time import time
 from typing import Annotated, Iterable
 
 import humanize
@@ -15,10 +17,11 @@ import numpy as np
 import typer
 from IPython import embed
 from nixio.util import check_entity_type
-from sklearn.cluster import DBSCAN
+from numba import njit
 from scipy.interpolate import interp1d
 from scipy.signal import find_peaks
 from scipy.signal.windows import tukey
+from sklearn.cluster import DBSCAN
 
 from thunderpulse.data_handling.data import Data, SensorArray, load_data
 from thunderpulse.dsp.common_reference import common_median_reference
@@ -184,21 +187,178 @@ def detect_peaks(
         # build matching channel-id array
         channels_list.append(np.full_like(peaks, ch, dtype=np.int32))
 
-    return np.concatenate(peaks_list), np.concatenate(channels_list)
+    return np.concatenate(peaks_list, dtype=np.int64), np.concatenate(
+        channels_list, dtype=np.int64
+    )
 
 
-def make_custom_metric(time_thresh, min_channel_diff, max_channel_diff):
-    def custom_metric(a, b):
-        time_diff = abs(a[0] - b[0])
-        channel_diff = abs(a[1] - b[1])
-        if (
-            time_diff <= time_thresh
-            and min_channel_diff <= channel_diff <= max_channel_diff
-        ):
-            return 0
-        return 1
+@njit(cache=True)
+def groub_pulses(
+    pulses: np.ndarray,
+    sensoryarray: np.ndarray,
+    min_peak_distance_index: int,
+    distance_channels: float,
+) -> np.ndarray:
+    """
+    Group pulses in space and time.
 
-    return custom_metric
+    Parameters
+    ----------
+    pulses : np.ndarray of shape (n_pulses, 2)
+        Array of detected pulses. Each row should be [pulse_time, pulse_channel].
+    sensoryarray : np.ndarray of shape (n_channels, 3)
+        Array of channel positions in 3D space. Each row should be [x, y, z] for a channel.
+    min_peak_distance_index : int
+        Minimum time distance (in index units) to group pulses.
+    distance_channels : float
+        Maximum spatial distance (in the same units as sensoryarray) to group pulses.
+
+    Returns
+    -------
+    labels_unsorted : np.ndarray of shape (n_pulses,)
+        Array of group labels for each pulse, in the original (unsorted) order.
+    """
+    n_peaks = len(pulses)
+    sorted_idx = np.argsort(pulses[:, 0])
+    peaks_sorted = pulses[sorted_idx]
+
+    labels = -np.ones(len(peaks_sorted), dtype=np.int32)
+    current_label = 0
+
+    for i in range(n_peaks):
+        if labels[i] != -1:
+            continue
+        labels[i] = current_label
+        t1 = peaks_sorted[i, 0]
+        ch1 = int(peaks_sorted[i, 1])
+        pos1 = sensoryarray[ch1]
+        for j in range(i + 1, n_peaks):
+            t2 = peaks_sorted[j, 0]
+            if t2 - t1 > min_peak_distance_index:
+                break
+            ch2 = int(peaks_sorted[j, 1])
+            pos2 = sensoryarray[ch2]
+            # Euclidean distance in 3D
+            dist = np.sqrt(
+                (pos1[0] - pos2[0]) ** 2
+                + (pos1[1] - pos2[1]) ** 2
+                + (pos1[2] - pos2[2]) ** 2
+            )
+            if dist <= distance_channels:
+                labels[j] = current_label
+        current_label += 1
+
+    # To get back to original order:
+    labels_unsorted = np.empty_like(labels)
+    for i in range(n_peaks):
+        labels_unsorted[sorted_idx[i]] = labels[i]
+
+    return labels_unsorted
+
+
+def groub_with_min_channels(
+    labels, pulse_list, channels_list, min_channels_in_group
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    # Find unique cluster labels
+    unique_labels = np.unique(labels)
+    # Prepare a mask for valid clusters
+    valid_mask = np.zeros_like(labels, dtype=bool)
+
+    for label in unique_labels:
+        if label == -1:
+            continue  # skip noise/unlabeled
+        # Indices of peaks in this cluster
+        idxs = np.where(labels == label)[0]
+        # Channels in this cluster
+        channels_in_group = np.unique(channels_list[idxs])
+        if len(channels_in_group) >= min_channels_in_group:
+            valid_mask[idxs] = True  # mark as valid
+
+    pulse_list = pulse_list[valid_mask]
+    channels_list = channels_list[valid_mask]
+    labels = labels[valid_mask]
+    return pulse_list, channels_list, labels
+
+
+@njit(cache=True)
+def group_with_min_channels_numba(
+    labels: np.ndarray,
+    pulse_list: np.ndarray,
+    channels_list: np.ndarray,
+    min_channels_in_group: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Filter clusters to only those containing a minimum number of unique channels.
+
+    Parameters
+    ----------
+    labels : np.ndarray of shape (n_pulses,)
+        Cluster labels for each pulse. Noise/unlabeled should be -1.
+    pulse_list : np.ndarray of shape (n_pulses,)
+        Array of pulse times or indices.
+    channels_list : np.ndarray of shape (n_pulses,)
+        Array of channel indices for each pulse.
+    min_channels_in_group : int
+        Minimum number of unique channels required for a cluster to be kept.
+
+    Returns
+    -------
+    pulse_list_out : np.ndarray
+        Filtered pulse_list, only including pulses in valid clusters.
+    channels_list_out : np.ndarray
+        Filtered channels_list, only including pulses in valid clusters.
+    labels_out : np.ndarray
+        Filtered labels, only including pulses in valid clusters.
+    """
+    unique_labels = np.unique(labels)
+    n = len(labels)
+    valid_mask = np.zeros(n, dtype=np.bool_)
+
+    for k in range(len(unique_labels)):
+        label = unique_labels[k]
+        if label == -1:
+            continue
+        # Find indices for this label
+        channels_seen = np.empty(n, dtype=channels_list.dtype)
+        n_channels_seen = 0
+        for i in range(n):
+            if labels[i] == label:
+                ch = channels_list[i]
+                # Check if channel is already seen
+                already_seen = False
+                for j in range(n_channels_seen):
+                    if channels_seen[j] == ch:
+                        already_seen = True
+                        break
+                if not already_seen:
+                    channels_seen[n_channels_seen] = ch
+                    n_channels_seen += 1
+        if n_channels_seen >= min_channels_in_group:
+            # Mark all indices for this label as valid
+            for i in range(n):
+                if labels[i] == label:
+                    valid_mask[i] = True
+
+    # Count valid entries
+    n_valid = 0
+    for i in range(n):
+        if valid_mask[i]:
+            n_valid += 1
+
+    # Allocate output arrays
+    pulse_list_out = np.empty(n_valid, dtype=pulse_list.dtype)
+    channels_list_out = np.empty(n_valid, dtype=channels_list.dtype)
+    labels_out = np.empty(n_valid, dtype=labels.dtype)
+
+    idx = 0
+    for i in range(n):
+        if valid_mask[i]:
+            pulse_list_out[idx] = pulse_list[i]
+            channels_list_out[idx] = channels_list[i]
+            labels_out[idx] = labels[i]
+            idx += 1
+
+    return pulse_list_out, channels_list_out, labels_out
 
 
 def detect_peaks_on_block(
@@ -220,13 +380,25 @@ def detect_peaks_on_block(
         mode=params.peaks.mode,
         find_peaks_kwargs=params.peaks.find_peaks_kwargs,
     )
-    pulse_channel = np.stack((pulse_list, channels_list)).T
-    index =np.argsort(pulse_channel[:, 0])
-    custom_metric = make_custom_metric(30, 0, 5)
 
-    clustering = DBSCAN(eps=0.5, min_samples=1, metric=custom_metric)
-    labels = clustering.fit_predict(pulse_channel[index])
+    min_peak_distance_index = int(
+        np.ceil(params.peaks.min_peak_distance_s * rate)
+    )
+    sensoryarray = np.column_stack(
+        (params.sensoryarray.x, params.sensoryarray.y, params.sensoryarray.z)
+    )
+    pulses = np.column_stack((pulse_list, channels_list))
 
+    labels = groub_pulses(
+        pulses,
+        sensoryarray,
+        min_peak_distance_index,
+        params.peaks.distance_channels,
+    )
+    if params.peaks.min_channels > 1:
+        pulse_list, channels_list, labels = group_with_min_channels_numba(
+            labels, pulse_list, channels_list, params.peaks.min_channels
+        )
 
     if not params.peaks.cutout_window_around_peak_s:
         cutout_window_around_peak = int(
@@ -250,6 +422,7 @@ def detect_peaks_on_block(
     # Remove the pulses where the window would overlap the edge of the block
     pulse_list = pulse_list[good_pulse_bool]
     channels_list = channels_list[good_pulse_bool]
+    group_labels = labels[good_pulse_bool]
 
     start_stop_index = np.full(
         shape=(len(pulse_list), 2), fill_value=-1, dtype=np.int32
@@ -280,6 +453,7 @@ def detect_peaks_on_block(
     output_data["channels"] = channels_list
     output_data["centers"] = pulse_center
     output_data["start_stop_index"] = start_stop_index
+    output_data["groub"] = group_labels
 
     # TODO: Vectorize this
     # pulse_array = input_data[:, channels_list][
