@@ -103,6 +103,7 @@ def main(
     ui_callbacks.time_slider.callbacks(app)
 
     ui_callbacks.graphs.traces.callbacks_traces(app)
+    ui_callbacks.graphs.waveforms.callbacks(app)
     ui_callbacks.graphs.probe.callbacks_sensory_array(app)
     ui_callbacks.graphs.dashumap.callbacks_umap(app)
     ui_callbacks.keyboard_shortcuts.create_shortcuts(app)
