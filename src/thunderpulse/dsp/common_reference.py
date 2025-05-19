@@ -6,4 +6,4 @@ def common_median_reference(data):
 
 
 def common_mean_reference(data):
-    return data - np.mean(data, axis=1, keepdims=True)
+    return data - np.mean(data, axis=0, keepdims=True)
