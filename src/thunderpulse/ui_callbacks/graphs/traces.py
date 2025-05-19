@@ -243,7 +243,7 @@ def callbacks_traces(app):
 
             if output:
                 unique_groups = sorted(set(output["groub"]))
-                color_set = plotly.colors.qualitative.D3
+                color_set = plotly.colors.qualitative.Dark24
                 n_colors = len(color_set)
                 group_to_color = {
                     group: color_set[i % n_colors]
@@ -267,23 +267,6 @@ def callbacks_traces(app):
                         row=i,
                         col=[1] * channel_length,
                     )
-                #
-                # for i, ch in enumerate(channels, start=1):
-                #     pulses = output["centers"][output["channels"] == ch]
-                #
-                #     fig.add_trace(
-                #         go.Scattergl(
-                #             x=pulses / d.metadata.samplerate + time_slice[0],
-                #             y=sliced_data[pulses, ch],
-                #             mode="markers",
-                #             marker_symbol="arrow",
-                #             marker_color="red",
-                #             marker_size=10,
-                #             name=f"Peaks {ch}",
-                #         ),
-                #         row=i,
-                #         col=[1] * channel_length,
-                #     )
             peaks = output
 
         fig.update_layout(
