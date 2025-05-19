@@ -1,3 +1,5 @@
+from ast import In
+
 import numpy as np
 import plotly.colors
 import plotly.express as px
@@ -62,9 +64,10 @@ def callbacks_traces(app):
                 "detect_pulses": Input("sw_detect_pulses", "value"),
             },
             "pulse_detection_config": Input("pulse_detection_config", "data"),
+            "pulse_storage": Input("peak_storage", "data"),
         },
     )
-    def update_graph_traces(general, pulse_detection_config):
+    def update_graph_traces(general, pulse_detection_config, pulse_storage):
         (
             filepath,
             tabs,
@@ -74,11 +77,11 @@ def callbacks_traces(app):
             detect_pulses,
         ) = general.values()
         if tabs and tabs != "tab_traces":
-            return default_traces_figure(), None
+            return default_traces_figure(), pulse_storage
         if not filepath:
-            return default_traces_figure(), None
+            return default_traces_figure(), pulse_storage
         if not filepath["data_path"]:
-            return default_traces_figure(), None
+            return default_traces_figure(), pulse_storage
 
         d = load_data(**filepath)
 
@@ -123,7 +126,7 @@ def callbacks_traces(app):
             rows=list(np.arange(channel_length) + 1),
             cols=[1] * channel_length,
         )
-        peaks = None
+        peaks = pulse_storage
         if detect_pulses:
             blockinfo = {
                 "blockiterval": 0,
