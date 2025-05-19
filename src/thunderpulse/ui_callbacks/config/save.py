@@ -1,23 +1,19 @@
-import json
 import pathlib
+from ast import Num
+from numbers import Number
 
 import nixio
-from dash import Dash, Input, Output, ctx
+import numpy as np
+from dash import Dash, Input, ctx
 from IPython import embed
 
 from thunderpulse.data_handling.data import load_data
-from thunderpulse.pulse_detection.config import (
-    BandpassParameters,
-    FiltersParameters,
-    FindPeaksKwargs,
-    NotchParameters,
-    Params,
-    PeakDetectionParameters,
-    PostProcessingParameters,
-    PreProcessingParameters,
-    SavgolParameters,
-)
-from thunderpulse.utils.check_config import check_config_params
+from thunderpulse.pulse_detection.config import Params
+from thunderpulse.utils.loggers import get_logger
+from thunderpulse.utils.logging_setup import setup_logging
+
+log = get_logger(__name__)
+setup_logging(log)
 
 
 def callbacks(app: Dash) -> None:
@@ -27,73 +23,13 @@ def callbacks(app: Dash) -> None:
                 "filepath": Input("filepath", "data"),
                 "save_button": Input("bt_save_config", "n_clicks"),
             },
-            "pre_filter": {
-                "common_median_reference": Input(
-                    "sw_common_reference", "value"
-                ),
-            },
-            "savgol": {
-                "window_length_s": Input("num_savgol_window_length", "value"),
-                "polyorder": Input("num_savgol_polyorder", "value"),
-            },
-            "bandpass": {
-                "lowcut": Input("num_bandpass_lowcutoff", "value"),
-                "highcut": Input("num_bandpass_highcutoff", "value"),
-            },
-            "notch": {
-                "notch_freq": Input("num_notchfilter_freq", "value"),
-                "quality_factor": Input("num_notchfilter_quality", "value"),
-            },
-            "general_pulse": {
-                "buffersize_s": Input("num_pulse_buffersize", "value")
-            },
-            "pulse": {
-                "min_channels": Input("num_pulse_min_channels", "value"),
-                "mode": Input("select_pulse_mode", "value"),
-                "min_peak_distance_s": Input(
-                    "num_pulse_min_peak_distance", "value"
-                ),
-                "cutout_window_around_peak_s": Input(
-                    "num_pulse_waveform", "value"
-                ),
-            },
-            "findpeaks": {
-                "height": Input("num_findpeaks_height", "value"),
-                "threshold": Input("num_findpeaks_threshold", "value"),
-                "distance": Input("num_findpeaks_distance", "value"),
-                "prominence": Input("num_findpeaks_prominence", "value"),
-                "width": Input("num_findpeaks_width", "value"),
-            },
-            "postprocessing_v": {
-                "enable_resampling": Input("sw_resampling_enable", "value"),
-                "n_resamples": Input("num_resampling_n", "value"),
-                "enable_normalization": Input(
-                    "sw_normalization_enable", "value"
-                ),
-                "enable_centering": Input("sw_sample_centering", "value"),
-                "enable_sign_correction": Input(
-                    "sw_sample_sign_correction", "value"
-                ),
-                "centering_method": Input(
-                    "select_sample_centering_method", "value"
-                ),
-                "polarity": Input(
-                    "select_sample_sign_correction_polarity", "value"
-                ),
-            },
+            "pulse_detection_config": Input("pulse_detection_config", "data"),
         },
         prevent_initial_call=True,
     )
     def save_config(
         general: dict,
-        pre_filter,
-        savgol,
-        bandpass,
-        notch,
-        general_pulse,
-        pulse,
-        findpeaks,
-        postprocessing_v,
+        pulse_detection_config: dict,
     ) -> dict | None:
         button = ctx.triggered_id == "bt_save_config"
         if not button:
@@ -103,60 +39,21 @@ def callbacks(app: Dash) -> None:
             return None
         if not filepath["save_path"]:
             return None
+        log.debug("Saving pulse detection parameters")
         d = load_data(**filepath)
+        params = Params.from_dict(pulse_detection_config)
 
-        apply_filters_names = []
-        apply_filters_params = []
-        filter_params_function = [savgol, bandpass, notch]
-        filter_names = FiltersParameters().filters
-        filter_params = [SavgolParameters, BandpassParameters, NotchParameters]
-        for f_name, f_params, f_params_func in zip(
-            filter_names, filter_params, filter_params_function, strict=True
-        ):
-            check_f = check_config_params(f_params_func)
-            if check_f:
-                apply_filters_params.append(f_params(**f_params_func))
-                apply_filters_names.append(f_name)
-
-        prefilter = PreProcessingParameters(**pre_filter)
-
-        filters = FiltersParameters(
-            filters=apply_filters_names, filter_params=apply_filters_params
-        )
-
-        findpeaks = FindPeaksKwargs(**findpeaks)
-
-        peaks = PeakDetectionParameters(**pulse, find_peaks_kwargs=findpeaks)
-        postprocessing_v["enable_resampling"] = bool(
-            postprocessing_v["enable_resampling"]
-        )
-        postprocessing_v["enable_sign_correction"] = bool(
-            postprocessing_v["enable_sign_correction"]
-        )
-        postprocessing_v["enable_centering"] = bool(
-            postprocessing_v["enable_centering"]
-        )
-        postprocessing_v["enable_normalization"] = bool(
-            postprocessing_v["enable_normalization"]
-        )
-
-        postprocessing = PostProcessingParameters(**postprocessing_v)
-        params = Params(
-            prefilter,
-            filters,
-            peaks,
-            postprocessing,
-            d.sensorarray,
-            **general_pulse,
-        )
         current_parms = params.to_dict()
 
         save_path = pathlib.Path(filepath["save_path"]) / "config.nix"
 
         file = nixio.File(str(save_path), nixio.FileMode.Overwrite)
-        sec = file.create_section("general", "thunderpulse.general")
-        # TODO: Fix metatdata cration if it contains None
-        # create_metadata_from_dict(current_parms, sec)
+        sec = file.create_section(
+            "pulse_detection_config", "thunderpulse.pulse_detection.config"
+        )
+        create_metadata_from_dict(current_parms, sec)
+        embed()
+
         file.close()
 
         with open(save_path.with_suffix(".json"), "wb") as f:
@@ -170,10 +67,61 @@ def create_metadata_from_dict(d, section: nixio.Section):
             create_metadata_from_dict(value, new_sec)
         else:
             try:
-                section.create_property(key, values_or_dtype=value)
+                prop = section.create_property(key, values_or_dtype=value)
+                prop.data_type = type(value)
             except TypeError:
                 if isinstance(value, list):
-                    value = [str(i) for i in value]
+                    v = [str(i) for i in value]
                 else:
-                    value = str(value)
-                section.create_property(key, values_or_dtype=value)
+                    v = str(value)
+                section.create_property(key, values_or_dtype=v)
+
+
+def nix_metadata_to_dict(section):
+    info = {}
+    for p in section.props:
+        info[p.name] = (
+            [v for v in p.values],
+            p.unit if p.unit is not None else "",
+        )
+    for s in section.sections:
+        info[s.name] = nix_metadata_to_dict(s)
+    return info
+
+
+def create_dict_from_section(section: nixio.Section) -> dict:
+    d = {}
+    for key, value in section.items():
+        if isinstance(value, nixio.Section):
+            subdict = create_dict_from_section(value)
+            d[key] = subdict
+        else:
+            d[key] = value.values
+    return d
+
+
+def clean_value(val):
+    # Convert numpy scalars to Python scalars
+    if isinstance(val, (np.generic,)):
+        return val.item()
+    # Convert string 'None' to None
+    if val == "None":
+        return None
+    # Convert tuple of length 1 to the value
+    if isinstance(val, tuple):
+        if len(val) == 1:
+            return clean_value(val[0])
+        else:
+            # Convert tuple to list of cleaned values
+            return [clean_value(v) for v in val]
+    # Recursively clean dicts
+    if isinstance(val, dict):
+        return {k: clean_value(v) for k, v in val.items()}
+    # Recursively clean lists
+    if isinstance(val, list):
+        return [clean_value(v) for v in val]
+    return val
+
+
+def clean_dict(d):
+    return {k: clean_value(v) for k, v in d.items()}

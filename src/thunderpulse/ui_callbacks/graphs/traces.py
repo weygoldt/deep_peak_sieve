@@ -61,71 +61,10 @@ def callbacks_traces(app):
                 "probe_selected_channels": Input("probe", "selectedData"),
                 "detect_pulses": Input("sw_detect_pulses", "value"),
             },
-            "pre_filter": {
-                "common_median_reference": Input(
-                    "sw_common_reference", "value"
-                ),
-            },
-            "savgol": {
-                "window_length_s": Input("num_savgol_window_length", "value"),
-                "polyorder": Input("num_savgol_polyorder", "value"),
-            },
-            "bandpass": {
-                "lowcut": Input("num_bandpass_lowcutoff", "value"),
-                "highcut": Input("num_bandpass_highcutoff", "value"),
-            },
-            "notch": {
-                "notch_freq": Input("num_notchfilter_freq", "value"),
-                "quality_factor": Input("num_notchfilter_quality", "value"),
-            },
-            "general_pulse": {
-                "buffersize_s": Input("num_pulse_buffersize", "value")
-            },
-            "pulse": {
-                "min_channels": Input("num_pulse_min_channels", "value"),
-                "mode": Input("select_pulse_mode", "value"),
-                "min_peak_distance_s": Input(
-                    "num_pulse_min_peak_distance", "value"
-                ),
-                "cutout_window_around_peak_s": Input(
-                    "num_pulse_waveform", "value"
-                ),
-                "distance_channels": Input("num_pulse_distance", "value"),
-            },
-            "findpeaks": {
-                "height": Input("num_findpeaks_height", "value"),
-                "threshold": Input("num_findpeaks_threshold", "value"),
-                "distance": Input("num_findpeaks_distance", "value"),
-                "prominence": Input("num_findpeaks_prominence", "value"),
-                "width": Input("num_findpeaks_width", "value"),
-            },
-            "postprocessing_v": {
-                "enable_resampling": Input("sw_resampling_enable", "value"),
-                "n_resamples": Input("num_resampling_n", "value"),
-                "enable_centering": Input("sw_sample_centering", "value"),
-                "enable_sign_correction": Input(
-                    "sw_sample_sign_correction", "value"
-                ),
-                "centering_method": Input(
-                    "select_sample_centering_method", "value"
-                ),
-                "polarity": Input(
-                    "select_sample_sign_correction_polarity", "value"
-                ),
-            },
+            "pulse_detection_config": Input("pulse_detection_config", "data"),
         },
     )
-    def update_graph_traces(
-        general,
-        pre_filter,
-        savgol,
-        bandpass,
-        notch,
-        general_pulse,
-        pulse,
-        findpeaks,
-        postprocessing_v,
-    ):
+    def update_graph_traces(general, pulse_detection_config):
         (
             filepath,
             tabs,
@@ -143,50 +82,7 @@ def callbacks_traces(app):
 
         d = load_data(**filepath)
 
-        # NOTE: rewrite checkbox input [1]/True []/False to bool
-        pre_filter["common_median_reference"] = bool(
-            pre_filter["common_median_reference"]
-        )
-        prefilter = PreProcessingParameters(**pre_filter)
-
-        apply_filters_names = []
-        apply_filters_params = []
-        filter_params_function = [savgol, bandpass, notch]
-        filter_names = FiltersParameters().filters
-        filter_params = [SavgolParameters, BandpassParameters, NotchParameters]
-        for f_name, f_params, f_params_func in zip(
-            filter_names, filter_params, filter_params_function, strict=True
-        ):
-            check_f = check_config_params(f_params_func)
-            if check_f:
-                apply_filters_params.append(f_params(**f_params_func))
-                apply_filters_names.append(f_name)
-
-        filters = FiltersParameters(
-            filters=apply_filters_names, filter_params=apply_filters_params
-        )
-
-        findpeaks = FindPeaksKwargs(**findpeaks)
-        peaks = PeakDetectionParameters(**pulse, find_peaks_kwargs=findpeaks)
-
-        postprocessing_v["enable_resampling"] = bool(
-            postprocessing_v["enable_resampling"]
-        )
-        postprocessing_v["enable_sign_correction"] = bool(
-            postprocessing_v["enable_sign_correction"]
-        )
-        postprocessing_v["enable_centering"] = bool(
-            postprocessing_v["enable_centering"]
-        )
-        postprocessing = PostProcessingParameters(**postprocessing_v)
-        params = Params(
-            prefilter,
-            filters,
-            peaks,
-            postprocessing,
-            sensoryarray=d.sensorarray,
-            **general_pulse,
-        )
+        params = Params.from_dict(pulse_detection_config)
 
         channels = np.array(channels)
 
