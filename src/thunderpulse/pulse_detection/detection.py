@@ -67,41 +67,33 @@ def apply_filters(
     params: Params,
 ) -> np.ndarray:
     """Apply the specified filters to the data."""
-    if not isinstance(params.filters.filters, list):
-        msg = "Filters must be a list of strings"
-        raise TypeError(msg)
-    if not isinstance(params.filters.filter_params, list):
-        msg = "Filter parameters must be a list of dictionaries"
-        raise TypeError(msg)
-    if len(params.filters.filters) != len(params.filters.filter_params):
-        msg = "Filters and filter parameters must be the same length"
-        raise ValueError(msg)
-    if len(params.filters.filters) == 0:
+    # PreFilter operations
+    if getattr(params.preprocessing, "common_median_reference", False):
+        data = common_median_reference(data)
+
+    # Get the filter ordering
+    filter_ordering = getattr(params.filters, "filter_ordering", [])
+    if not filter_ordering:
         log.debug("No filters applied")
         return data
 
-    # PreFilter operations
-    # TODO: This should be a list of operations to apply before filtering
-    if params.preprocessing.common_median_reference:
-        data = common_median_reference(data)
-
-    # Apply all filters in sequence
     log.info("Applying filters")
-    for filter_name, filter_params in zip(
-        params.filters.filters,
-        params.filters.filter_params,
-        strict=True,
-    ):
+    for filter_name in filter_ordering:
+        filter_params = getattr(params.filters, filter_name, None)
+        if filter_params is None:
+            log.debug(f"Skipping filter '{filter_name}' (no parameters set)")
+            continue
+
         log.debug(f"Applying filter: {filter_name}")
         log.debug(f"Filter parameters: {filter_params}")
 
-        # Check if filter requires samplerate
+        kwargs = filter_params.to_kwargs(keep_none=False)
+
         data = filter_map[filter_name](
             data,
             rate,
-            **filter_params.to_kwargs(keep_none=False),
+            **kwargs,
         )
-        log.debug(f"Filter {filter_name} applied")
 
     return data
 
@@ -371,7 +363,7 @@ def detect_peaks_on_block(
     output_data = {}
 
     # Apply filtering
-    block_filtered = apply_filters(input_data, rate, params=params)
+    block_filtered = apply_filters(input_data, rate, params)
 
     # Detect peaks on each channel
     pulse_list, channels_list = detect_peaks(

@@ -5,10 +5,11 @@ import sys
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, List, Literal, Optional
 
 import numpy as np
 import orjson
+from dacite import Config, from_dict
 from IPython import embed
 
 from thunderpulse.data_handling.data import SensorArray
@@ -109,11 +110,31 @@ class PeakDetectionParameters(KwargsDataclass):
     mode: str = "both"  # 'peak', 'trough', 'both'
     min_peak_distance_s: float = 0.001  # seconds
     cutout_window_around_peak_s: float = 0.005  # seconds
-    distance_channels: float = 50 # distance unit sensoryarray
+    distance_channels: float = 50  # distance unit sensoryarray
 
     find_peaks_kwargs: FindPeaksKwargs = field(
         default_factory=lambda: FindPeaksKwargs(height=0.001)
     )
+
+
+# @dataclass
+# class FiltersParameters(KwargsDataclass):
+#     """
+#     Arbitrary sequence of filters.
+#
+#     *filters* is a list of **names**; *filter_params* holds a *parallel* list of
+#     parameter objects (must be the same length / order).
+#     """
+#     filters: list[str] = field(
+#         default_factory=lambda: ["savgol", "bandpass", "notch"]
+#     )
+#     filter_params: list[KwargsDataclass] = field(
+#         default_factory=lambda: [
+#             SavgolParameters(),
+#             BandpassParameters(),
+#             NotchParameters(),
+#         ]
+#     )
 
 
 @dataclass
@@ -125,16 +146,39 @@ class FiltersParameters(KwargsDataclass):
     parameter objects (must be the same length / order).
     """
 
-    filters: list[str] = field(
+    savgol: Optional[SavgolParameters] = field(
+        default_factory=SavgolParameters
+    )
+    bandpass: Optional[BandpassParameters] = field(
+        default_factory=BandpassParameters
+    )
+    notch: Optional[NotchParameters] = field(default_factory=NotchParameters)
+
+    filter_ordering: list[str] = field(
         default_factory=lambda: ["savgol", "bandpass", "notch"]
     )
-    filter_params: list[KwargsDataclass] = field(
-        default_factory=lambda: [
-            SavgolParameters(),
-            BandpassParameters(),
-            NotchParameters(),
+
+    def remove_filters_with_all_none_params(self):
+        def all_params_none(obj):
+            if obj is None:
+                return True
+            if hasattr(obj, "__dataclass_fields__"):
+                return all(
+                    getattr(obj, f) is None for f in obj.__dataclass_fields__
+                )
+            if isinstance(obj, dict):
+                return all(v is None for v in obj.values())
+            return False
+
+        for filter_name in list(self.filter_ordering):
+            value = getattr(self, filter_name, None)
+            if all_params_none(value):
+                setattr(self, filter_name, None)
+        self.filter_ordering = [
+            name
+            for name in self.filter_ordering
+            if getattr(self, name, None) is not None
         ]
-    )
 
 
 @dataclass
@@ -177,7 +221,7 @@ class Params:
     sensoryarray: SensorArray = field(default_factory=SensorArray)
     buffersize_s: float = 60.0  # seconds
 
-    # ── (de)serialisation helpers ──────────────────────────────────────
+    # ── (de)serialisation     helpers ──────────────────────────────────────
     def to_dict(self) -> dict:
         """Deep-convert to plain Python containers (JSON-safe)."""
         return asdict(self)
@@ -186,38 +230,15 @@ class Params:
     def from_dict(cls, d: dict) -> "Params":
         """Re-build :class:`Params` from *asdict*-style dict."""
         # manual reconstruction because nested dataclasses are involved
-        return cls(
-            filters=FiltersParameters(
-                filters=d["filters"]["filters"],
-                filter_params=[
-                    _build_filter_param(pname, pobj)
-                    for pname, pobj in zip(
-                        d["filters"]["filters"],
-                        d["filters"]["filter_params"],
-                        strict=True,
-                    )
-                ],
-            ),
-            peaks=PeakDetectionParameters(
-                min_channels=d["peaks"]["min_channels"],
-                mode=d["peaks"]["mode"],
-                min_peak_distance_s=d["peaks"]["min_peak_distance_s"],
-                cutout_window_around_peak_s=d["peaks"][
-                    "cutout_window_around_peak_s"
-                ],
-                find_peaks_kwargs=FindPeaksKwargs(
-                    **d["peaks"]["find_peaks_kwargs"]
-                ),
-            ),
-            postprocessing=PostProcessingParameters(**d["postprocessing"]),
-            buffersize_s=d["buffersize_s"],
-            sensoryarray=SensorArray(
-                **{
-                    key: np.array(val)
-                    for key, val in d["sensoryarray"].items()
-                }
-            ),
+        for key in d["sensoryarray"]:
+            if hasattr(d["sensoryarray"][key], "tolist"):
+                d["sensoryarray"][key] = d["sensoryarray"][key].tolist()
+        params = from_dict(
+            data_class=cls,
+            data=d,
         )
+        params.sensoryarray.to_numpy()
+        return params
 
     def to_json(self, **json_kwargs) -> str:
         """Serialise to JSON string."""
