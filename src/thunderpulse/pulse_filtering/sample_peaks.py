@@ -120,6 +120,83 @@ class StratifiedRandomSampler(BaseSampler):
         return sample_indices
 
 
+class MaxAmplitudeSampler(BaseSampler):
+    def __init__(self, files: list, num_samples: int):
+        super().__init__(files, num_samples)
+
+    def sample(self) -> list:
+        # Check how many peaks in each file
+        num_samples_per_file = []
+        # with get_progress() as pbar:
+        #     task = pbar.add_task(
+        #         "Collecting number of samples per file", total=len(self.files)
+        #     )
+        for file in self.files:
+            if file.suffix == ".npz":
+                data = np.load(file)
+                key = list(data.keys())[0]
+                num_samples_per_file.append(len(data[key]))
+            elif file.suffix in [".nix", ".h5"]:
+                with nixio.File.open(str(file), nixio.FileMode.ReadOnly) as f:
+                    if len(f.blocks) == 0:
+                        log.warning(f"File {file} has no blocks.")
+                        continue
+                    if len(f.blocks) > 1:
+                        log.critical(
+                            f"File {file} has more than one block. Using the first one."
+                        )
+
+                    block = f.blocks[0]
+                    try:
+                        max_amp = block.data_arrays["pulse_max"]
+                    except KeyError:
+                        log.error(
+                            "No boolen Array found for max index please save your config with enable max amplitude on"
+                        )
+                        sys.exit(1)
+                    num_samples_per_file.append(np.sum(max_amp))
+            else:
+                log.warning(
+                    f"File {file} has unknown file type: {file.suffix}. Skipping."
+                )
+                # pbar.update(task, advance=1)
+
+        num_samples_per_file = np.array(num_samples_per_file)
+        log.info(
+            f"Found {len(num_samples_per_file)} files with total of {intword(np.sum(num_samples_per_file))} peaks."
+        )
+
+        # Check if the total number of peaks fits the requested number of samples
+        if np.sum(num_samples_per_file) < self.num_samples:
+            raise ValueError(
+                f"Not enough samples in the dataset. Found {np.sum(num_samples_per_file)}, but requested {self.num_samples}."
+            )
+
+        # Randomly sample peaks from each file to reach the requested number of samples
+        total_frac_per_file = num_samples_per_file / np.sum(
+            num_samples_per_file
+        )
+        target_samples_per_file = np.round(
+            total_frac_per_file * self.num_samples
+        ).astype(int)
+
+        sample_indices = []
+        with get_progress() as pbar:
+            task = pbar.add_task(
+                "Sampling peaks from each file", total=len(self.files)
+            )
+            for i in range(len(self.files)):
+                num_samples = num_samples_per_file[i]
+                num_samples_to_sample = target_samples_per_file[i]
+                indices = np.sort(
+                    np.random.randint(0, num_samples, num_samples_to_sample)
+                )
+                sample_indices.append(indices)
+                pbar.update(task, advance=1)
+
+        return sample_indices
+
+
 def check_nixfile(f, name):
     passed = True
     if len(f.blocks) == 0:
@@ -157,7 +234,7 @@ def main(
 ):
     configure_logging(verbose)
     data, _, dtype = get_file_list(
-        path=path, filetype="h5", make_save_path=False
+        path=path, filetype="nix", make_save_path=False
     )
 
     # check if data is nested list
@@ -166,7 +243,8 @@ def main(
 
     log.info(f"Found {len(data)} files in the dataset.")
 
-    sampler = StratifiedRandomSampler(data, num_samples=num_samples)
+    # sampler = StratifiedRandomSampler(data, num_samples=num_samples)
+    sampler = MaxAmplitudeSampler(data, num_samples)
 
     log.info(f"Sampling {num_samples} peaks from {len(data)} files.")
     sample_indices = sampler.sample()
