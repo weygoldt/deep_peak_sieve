@@ -371,7 +371,7 @@ def mark_min_pulse_per_group(data, pulse_list, channel_list, label_list):
     array([False,  True, False,  True])
     """
     n = pulse_list.shape[0]
-    is_max_peak = np.zeros(n, dtype=np.bool_)
+    is_min_peak = np.zeros(n, dtype=np.bool_)
     unique_labels = np.unique(label_list)
     for i in range(len(unique_labels)):
         label = unique_labels[i]
@@ -386,17 +386,17 @@ def mark_min_pulse_per_group(data, pulse_list, channel_list, label_list):
                 group_indices[idx] = j
                 idx += 1
         # Find max in group
-        max_idx = group_indices[0]
-        max_val = data[pulse_list[max_idx], channel_list[max_idx]]
+        min_idx = group_indices[0]
+        min_val = data[pulse_list[min_idx], channel_list[min_idx]]
         for k in range(1, count):
             val = data[
                 pulse_list[group_indices[k]], channel_list[group_indices[k]]
             ]
-            if val < max_val:
-                max_val = val
-                max_idx = group_indices[k]
-        is_max_peak[max_idx] = True
-    return is_max_peak
+            if val < min_val:
+                min_val = val
+                min_idx = group_indices[k]
+        is_min_peak[min_idx] = True
+    return is_min_peak
 
 
 def detect_peaks_on_block(
@@ -472,9 +472,10 @@ def detect_peaks_on_block(
     channels_list = channels_list[good_pulse_bool]
     group_labels = labels[good_pulse_bool]
 
+    # TODO: Make this an option for what polarity
     if params.peaks.take_pulse_with_max_amplitude:
         log.debug(
-            "Creating bool for pulse in groubs that have the maximum amplitude"
+            "Creating bool for pulse in groubs that have the minimum amplitude"
         )
         min_amplitude_pulses_groubs = mark_min_pulse_per_group(
             block_filtered, pulse_list, channels_list, group_labels
@@ -602,16 +603,6 @@ def process_dataset(
             "overlap": overlap,
             "label_counter": pulse_groub_label_block_counter,
         }
-        if blockiterval == 0:
-            if params.preprocessing.common_median_reference:
-                log.debug("Calculate the firs common median reference")
-                med_ref = get_common_median_reference(block)
-                first_common_median_reference = med_ref
-                block = block - first_common_median_reference
-                params.preprocessing.common_median_reference = False
-        else:
-            log.debug("Takeing the firs common median reference")
-            block = block - first_common_median_reference
 
         block_peaks = detect_peaks_on_block(
             block,
