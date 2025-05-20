@@ -42,7 +42,6 @@ def create_pulse_offcanvas() -> dbc.Card:
                                             [
                                                 html.H6(
                                                     "Buffersize for detection [s]",
-                                                    id="h6_pulse_buffersize",
                                                 ),
                                                 dbc.Input(
                                                     type="number",
@@ -53,9 +52,9 @@ def create_pulse_offcanvas() -> dbc.Card:
                                                     persistence=True,
                                                     persistence_type="local",
                                                 ),
+                                                html.Br(),
                                                 html.H6(
                                                     "Number of channels where pulses should be detected",
-                                                    id="h6_pulse_min_channels",
                                                 ),
                                                 dbc.Input(
                                                     type="number",
@@ -66,9 +65,22 @@ def create_pulse_offcanvas() -> dbc.Card:
                                                     persistence=True,
                                                     persistence_type="local",
                                                 ),
+                                                html.Br(),
+                                                dbc.Checklist(
+                                                    options=[
+                                                        {
+                                                            "label": "Take Pulse with lowest amplitude",
+                                                            "value": True,
+                                                        }
+                                                    ],
+                                                    id="sw_pulse_highest_amplitude",
+                                                    switch=True,
+                                                    persistence=True,
+                                                    persistence_type="local",
+                                                ),
+                                                html.Br(),
                                                 html.H6(
                                                     "Distance on sensoryarray on wich detected pulses are grouped",
-                                                    id="h6_pulse_distance",
                                                 ),
                                                 dbc.Input(
                                                     type="number",
@@ -79,6 +91,7 @@ def create_pulse_offcanvas() -> dbc.Card:
                                                     persistence=True,
                                                     persistence_type="local",
                                                 ),
+                                                html.Br(),
                                                 html.H6(
                                                     "Mode of pulse detection,[peak, trough, both]",
                                                     id="h6_pulse_mode",
@@ -102,6 +115,7 @@ def create_pulse_offcanvas() -> dbc.Card:
                                                     persistence=True,
                                                     persistence_type="local",
                                                 ),
+                                                html.Br(),
                                                 html.H6(
                                                     "Time for grouping pulses across channels [seconds]",
                                                     id="h6_pulse_general",
@@ -114,6 +128,7 @@ def create_pulse_offcanvas() -> dbc.Card:
                                                     persistence=True,
                                                     persistence_type="local",
                                                 ),
+                                                html.Br(),
                                                 html.H6(
                                                     "Waveform duration from the center of the pulse [seconds]",
                                                     id="h6_pulse_waveform",
@@ -291,7 +306,6 @@ def create_pulse_offcanvas() -> dbc.Card:
                                                 ),
                                                 html.H6(
                                                     "Centering method",
-                                                    id="h6_centering_method",
                                                 ),
                                                 dbc.Select(
                                                     id="select_sample_centering_method",
