@@ -67,6 +67,9 @@ def callbacks(app):
                 "min_peak_distance_s": Input(
                     "num_pulse_min_peak_distance", "value"
                 ),
+                "take_pulse_with_max_amplitude": Input(
+                    "sw_pulse_highest_amplitude", "value"
+                ),
                 "cutout_window_around_peak_s": Input(
                     "num_pulse_waveform", "value"
                 ),
@@ -85,6 +88,9 @@ def callbacks(app):
                 "enable_centering": Input("sw_sample_centering", "value"),
                 "enable_sign_correction": Input(
                     "sw_sample_sign_correction", "value"
+                ),
+                "enable_normalization": Input(
+                    "sw_normalization_enable", "value"
                 ),
                 "centering_method": Input(
                     "select_sample_centering_method", "value"
@@ -122,31 +128,15 @@ def callbacks(app):
         )
         prefilter = PreProcessingParameters(**pre_filter)
 
-        # apply_filters_names = []
-        # apply_filters_params = []
-        # filter_params_function = [savgol, bandpass, notch]
-        # filter_names = FiltersParameters().filters
-        # filter_params = [SavgolParameters, BandpassParameters, NotchParameters]
-        # for f_name, f_params, f_params_func in zip(
-        #     filter_names, filter_params, filter_params_function, strict=True
-        # ):
-        #     check_f = check_config_params(f_params_func)
-        #     if check_f:
-        #         apply_filters_params.append(f_params(**f_params_func))
-        #         apply_filters_names.append(f_name)
-        # savgol_filter = SavgolParameters(**savgol)
-        # bandpass_filter = BandpassParameters(**bandpass)
-        # notch_filter = NotchParameters(**notch)
-        #
         filters = FiltersParameters(
             savgol=SavgolParameters(**savgol),
             bandpass=BandpassParameters(**bandpass),
             notch=NotchParameters(**notch),
         )
         filters.remove_filters_with_all_none_params()
-        # filters = FiltersParameters(
-        #     filters=apply_filters_names, filter_params=apply_filters_params
-        # )
+        pulse["take_pulse_with_max_amplitude"] = bool(
+            pulse["take_pulse_with_max_amplitude"]
+        )
 
         findpeaks = FindPeaksKwargs(**findpeaks)
         peaks = PeakDetectionParameters(**pulse, find_peaks_kwargs=findpeaks)
@@ -159,6 +149,9 @@ def callbacks(app):
         )
         postprocessing["enable_centering"] = bool(
             postprocessing["enable_centering"]
+        )
+        postprocessing["enable_normalization"] = bool(
+            postprocessing["enable_normalization"]
         )
         postpros = PostProcessingParameters(**postprocessing)
         params = Params(
