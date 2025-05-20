@@ -10,6 +10,7 @@ from IPython.core.interactiveshell import is_integer_string
 from plotly import subplots
 
 from thunderpulse.data_handling.data import load_data
+from thunderpulse.dsp.common_reference import common_median_reference
 from thunderpulse.pulse_detection.config import (
     BandpassParameters,
     FiltersParameters,
@@ -102,6 +103,11 @@ def callbacks_traces(app):
             d.data, time_index, time_display, d.metadata.samplerate
         )
         index_time_start = int(time_slice[0] * d.metadata.samplerate)
+
+        # PreFilter operations
+        if getattr(params.preprocessing, "common_median_reference", False):
+            log.debug("Take the common median average")
+            sliced_data = common_median_reference(sliced_data)
         sliced_data = apply_filters(sliced_data, d.metadata.samplerate, params)
 
         colors = [*px.colors.qualitative.Light24, *px.colors.qualitative.Vivid]
@@ -132,7 +138,9 @@ def callbacks_traces(app):
                 "blockiterval": 0,
                 "blocksize": int(time_display * d.metadata.samplerate),
                 "overlap": 0,
+                "label_counter": 0,
             }
+
             output = detect_peaks_on_block(
                 sliced_data,
                 d.metadata.samplerate,
@@ -141,7 +149,7 @@ def callbacks_traces(app):
             )
 
             if output:
-                unique_groups = sorted(set(output["groub"]))
+                unique_groups = sorted(set(output["group"]))
                 color_set = plotly.colors.qualitative.Dark24
                 n_colors = len(color_set)
                 group_to_color = {
@@ -151,7 +159,7 @@ def callbacks_traces(app):
                 for i, ch in enumerate(channels, start=1):
                     pulse_index = output["channels"] == ch
                     pulses = output["centers"][pulse_index]
-                    groubs = output["groub"][pulse_index]
+                    groubs = output["group"][pulse_index]
                     pulse_colors = [group_to_color[g] for g in groubs]
                     fig.add_trace(
                         go.Scattergl(
