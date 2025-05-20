@@ -80,25 +80,25 @@ class PreProcessingParameters(KwargsDataclass):
 class SavgolParameters(KwargsDataclass):
     """Savitzky–Golay filter parameters."""
 
-    window_length_s: float = 0.0005  # seconds
-    polyorder: int = 3
+    window_length_s: float | None = 0.0005  # seconds
+    polyorder: int | None = 3
 
 
 @dataclass
 class BandpassParameters(KwargsDataclass):
     """Band-pass filter parameters."""
 
-    lowcut: float = 0.1
-    highcut: float = 3_000.0
-    order: int = 5
+    lowcut: float | None = 0.1
+    highcut: float | None = 3_000.0
+    order: int | None = 5
 
 
 @dataclass
 class NotchParameters(KwargsDataclass):
     """Notch filter (single frequency) parameters."""
 
-    notch_freq: float = 50.0
-    quality_factor: float = 30.0
+    notch_freq: float | None = 50.0
+    quality_factor: float | None = 30.0
 
 
 # higher-level blocks
@@ -110,6 +110,7 @@ class PeakDetectionParameters(KwargsDataclass):
     mode: str = "both"  # 'peak', 'trough', 'both'
     min_peak_distance_s: float = 0.001  # seconds
     cutout_window_around_peak_s: float = 0.005  # seconds
+    take_pulse_with_max_amplitude: bool = False 
     distance_channels: float = 50  # distance unit sensoryarray
 
     find_peaks_kwargs: FindPeaksKwargs = field(
