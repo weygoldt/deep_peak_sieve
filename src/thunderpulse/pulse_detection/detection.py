@@ -24,7 +24,10 @@ from scipy.signal.windows import tukey
 from sklearn.cluster import DBSCAN
 
 from thunderpulse.data_handling.data import Data, SensorArray, load_data
-from thunderpulse.dsp.common_reference import common_median_reference
+from thunderpulse.dsp.common_reference import (
+    common_median_reference,
+    get_common_median_reference,
+)
 from thunderpulse.pulse_detection.config import (
     FiltersParameters,
     FindPeaksKwargs,
@@ -67,9 +70,6 @@ def apply_filters(
     params: Params,
 ) -> np.ndarray:
     """Apply the specified filters to the data."""
-    # PreFilter operations
-    if getattr(params.preprocessing, "common_median_reference", False):
-        data = common_median_reference(data)
 
     # Get the filter ordering
     filter_ordering = getattr(params.filters, "filter_ordering", [])
@@ -179,56 +179,69 @@ def detect_peaks(
         # build matching channel-id array
         channels_list.append(np.full_like(peaks, ch, dtype=np.int32))
 
-    return np.concatenate(peaks_list, dtype=np.int64), np.concatenate(
-        channels_list, dtype=np.int64
-    )
+    peaks_list = np.concatenate(peaks_list, dtype=np.int64)
+    channels_list = np.concatenate(channels_list, dtype=np.int64)
+    sorting_index = np.argsort(peaks_list)
+
+    return peaks_list[sorting_index], channels_list[sorting_index]
 
 
 @njit(cache=True)
-def groub_pulses(
+def group_pulses(
     pulses: np.ndarray,
+    channels: np.ndarray,
     sensoryarray: np.ndarray,
     min_peak_distance_index: int,
     distance_channels: float,
 ) -> np.ndarray:
     """
-    Group pulses in space and time.
+    Group pulses in space and time based on temporal and spatial proximity.
 
     Parameters
     ----------
-    pulses : np.ndarray of shape (n_pulses, 2)
-        Array of detected pulses. Each row should be [pulse_time, pulse_channel].
+    pulses : np.ndarray of shape (n_pulses,)
+        1D array of detected pulse times (e.g., sample indices).
+    channels : np.ndarray of shape (n_pulses,)
+        1D array of channel indices corresponding to each pulse.
     sensoryarray : np.ndarray of shape (n_channels, 3)
         Array of channel positions in 3D space. Each row should be [x, y, z] for a channel.
     min_peak_distance_index : int
-        Minimum time distance (in index units) to group pulses.
+        Maximum allowed time difference (in index units) to group pulses together.
+        Pulses further apart in time will not be grouped.
     distance_channels : float
-        Maximum spatial distance (in the same units as sensoryarray) to group pulses.
+        Maximum allowed spatial distance (in the same units as sensoryarray) to group pulses.
+        Pulses on channels further apart than this will not be grouped.
 
     Returns
     -------
-    labels_unsorted : np.ndarray of shape (n_pulses,)
-        Array of group labels for each pulse, in the original (unsorted) order.
-    """
-    n_peaks = len(pulses)
-    sorted_idx = np.argsort(pulses[:, 0])
-    peaks_sorted = pulses[sorted_idx]
+    labels : np.ndarray of shape (n_pulses,)
+        Array of group labels for each pulse, in the original order.
+        Pulses assigned the same label belong to the same group.
 
-    labels = -np.ones(len(peaks_sorted), dtype=np.int32)
+    Notes
+    -----
+    - Pulses are grouped if they are within both the specified time and spatial distance.
+    - Grouping is performed in a greedy, sequential manner: each pulse starts a new group
+      unless it is close enough in time and space to a previous pulse, in which case it
+      is assigned to that group.
+    - The function assumes `pulses` is sorted by time.
+    """
+    n_peaks = pulses.shape[0]
+    labels = -np.ones(n_peaks, dtype=np.int64)
     current_label = 0
 
     for i in range(n_peaks):
         if labels[i] != -1:
             continue
         labels[i] = current_label
-        t1 = peaks_sorted[i, 0]
-        ch1 = int(peaks_sorted[i, 1])
+        t1 = pulses[i]
+        ch1 = channels[i]
         pos1 = sensoryarray[ch1]
         for j in range(i + 1, n_peaks):
-            t2 = peaks_sorted[j, 0]
+            t2 = pulses[j]
             if t2 - t1 > min_peak_distance_index:
                 break
-            ch2 = int(peaks_sorted[j, 1])
+            ch2 = channels[j]
             pos2 = sensoryarray[ch2]
             # Euclidean distance in 3D
             dist = np.sqrt(
@@ -240,43 +253,14 @@ def groub_pulses(
                 labels[j] = current_label
         current_label += 1
 
-    # To get back to original order:
-    labels_unsorted = np.empty_like(labels)
-    for i in range(n_peaks):
-        labels_unsorted[sorted_idx[i]] = labels[i]
-
-    return labels_unsorted
-
-
-def groub_with_min_channels(
-    labels, pulse_list, channels_list, min_channels_in_group
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    # Find unique cluster labels
-    unique_labels = np.unique(labels)
-    # Prepare a mask for valid clusters
-    valid_mask = np.zeros_like(labels, dtype=bool)
-
-    for label in unique_labels:
-        if label == -1:
-            continue  # skip noise/unlabeled
-        # Indices of peaks in this cluster
-        idxs = np.where(labels == label)[0]
-        # Channels in this cluster
-        channels_in_group = np.unique(channels_list[idxs])
-        if len(channels_in_group) >= min_channels_in_group:
-            valid_mask[idxs] = True  # mark as valid
-
-    pulse_list = pulse_list[valid_mask]
-    channels_list = channels_list[valid_mask]
-    labels = labels[valid_mask]
-    return pulse_list, channels_list, labels
+    return labels
 
 
 @njit(cache=True)
-def group_with_min_channels_numba(
+def group_with_min_channels(
     labels: np.ndarray,
-    pulse_list: np.ndarray,
-    channels_list: np.ndarray,
+    pulses: np.ndarray,
+    channels: np.ndarray,
     min_channels_in_group: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -311,11 +295,11 @@ def group_with_min_channels_numba(
         if label == -1:
             continue
         # Find indices for this label
-        channels_seen = np.empty(n, dtype=channels_list.dtype)
+        channels_seen = np.empty(n, dtype=channels.dtype)
         n_channels_seen = 0
         for i in range(n):
             if labels[i] == label:
-                ch = channels_list[i]
+                ch = channels[i]
                 # Check if channel is already seen
                 already_seen = False
                 for j in range(n_channels_seen):
@@ -338,19 +322,81 @@ def group_with_min_channels_numba(
             n_valid += 1
 
     # Allocate output arrays
-    pulse_list_out = np.empty(n_valid, dtype=pulse_list.dtype)
-    channels_list_out = np.empty(n_valid, dtype=channels_list.dtype)
+    pulse_list_out = np.empty(n_valid, dtype=pulses.dtype)
+    channels_list_out = np.empty(n_valid, dtype=channels.dtype)
     labels_out = np.empty(n_valid, dtype=labels.dtype)
 
     idx = 0
     for i in range(n):
         if valid_mask[i]:
-            pulse_list_out[idx] = pulse_list[i]
-            channels_list_out[idx] = channels_list[i]
+            pulse_list_out[idx] = pulses[i]
+            channels_list_out[idx] = channels[i]
             labels_out[idx] = labels[i]
             idx += 1
 
     return pulse_list_out, channels_list_out, labels_out
+
+
+@njit(cache=True)
+def mark_min_pulse_per_group(data, pulse_list, channel_list, label_list):
+    """
+    Returns a boolean array indicating the maximum peak in each group
+    for multi-channel data.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        2D array of shape (n_samples, n_channels).
+    pulse_list : np.ndarray
+        1D array of sample indices (length n_peaks).
+    channel_list : np.ndarray
+        1D array of channel indices (length n_peaks).
+    label_list : np.ndarray
+        1D array of group labels (integers), length n_peaks.
+
+    Returns
+    -------
+    is_max_peak : np.ndarray (bool)
+        Boolean array of the same length as peak_list.
+        True at indices corresponding to the maximum peak in each group,
+        False elsewhere.
+
+    Example
+    -------
+    >>> data = np.array([[0, 1], [5, 2], [7, 3], [4, 8]])
+    >>> peak_list = np.array([0, 1, 2, 3])
+    >>> channel_list = np.array([0, 1, 0, 1])
+    >>> label_list = np.array([0, 0, 1, 1])
+    >>> mark_max_peaks_per_group_numba_multichan(data, peak_list, channel_list, label_list)
+    array([False,  True, False,  True])
+    """
+    n = pulse_list.shape[0]
+    is_max_peak = np.zeros(n, dtype=np.bool_)
+    unique_labels = np.unique(label_list)
+    for i in range(len(unique_labels)):
+        label = unique_labels[i]
+        count = 0
+        for i in range(label_list.shape[0]):
+            if label_list[i] == label:
+                count += 1
+        group_indices = np.empty(count, dtype=np.int64)
+        idx = 0
+        for j in range(n):
+            if label_list[j] == label:
+                group_indices[idx] = j
+                idx += 1
+        # Find max in group
+        max_idx = group_indices[0]
+        max_val = data[pulse_list[max_idx], channel_list[max_idx]]
+        for k in range(1, count):
+            val = data[
+                pulse_list[group_indices[k]], channel_list[group_indices[k]]
+            ]
+            if val < max_val:
+                max_val = val
+                max_idx = group_indices[k]
+        is_max_peak[max_idx] = True
+    return is_max_peak
 
 
 def detect_peaks_on_block(
@@ -362,10 +408,16 @@ def detect_peaks_on_block(
     n_channels = input_data.shape[1]
     output_data = {}
 
+    # PreFilter operations
+    if getattr(params.preprocessing, "common_median_reference", False):
+        log.debug("Take the common median average")
+        input_data = common_median_reference(input_data)
+
     # Apply filtering
     block_filtered = apply_filters(input_data, rate, params)
 
     # Detect peaks on each channel
+    log.debug("Detecting pulses on channels")
     pulse_list, channels_list = detect_peaks(
         block_filtered,
         rate=rate,
@@ -379,16 +431,20 @@ def detect_peaks_on_block(
     sensoryarray = np.column_stack(
         (params.sensoryarray.x, params.sensoryarray.y, params.sensoryarray.z)
     )
-    pulses = np.column_stack((pulse_list, channels_list))
 
-    labels = groub_pulses(
-        pulses,
+    log.debug("Grouping pulses in space and time")
+    labels = group_pulses(
+        pulse_list,
+        channels_list,
         sensoryarray,
         min_peak_distance_index,
         params.peaks.distance_channels,
     )
     if params.peaks.min_channels > 1:
-        pulse_list, channels_list, labels = group_with_min_channels_numba(
+        log.debug(
+            f"Taking pulses that are only on min {params.peaks.min_channels} Channels"
+        )
+        pulse_list, channels_list, labels = group_with_min_channels(
             labels, pulse_list, channels_list, params.peaks.min_channels
         )
 
@@ -416,6 +472,15 @@ def detect_peaks_on_block(
     channels_list = channels_list[good_pulse_bool]
     group_labels = labels[good_pulse_bool]
 
+    if params.peaks.take_pulse_with_max_amplitude:
+        log.debug(
+            "Creating bool for pulse in groubs that have the maximum amplitude"
+        )
+        min_amplitude_pulses_groubs = mark_min_pulse_per_group(
+            block_filtered, pulse_list, channels_list, group_labels
+        )
+        output_data["pulse_min"] = min_amplitude_pulses_groubs
+
     window = np.arange(-cutout_window_around_peak, cutout_window_around_peak)
     pulse_indices = pulse_list[:, np.newaxis] + window[np.newaxis, :]
     channel_indices = channels_list[:, np.newaxis]
@@ -435,7 +500,8 @@ def detect_peaks_on_block(
     output_data["channels"] = channels_list
     output_data["centers"] = pulse_center
     output_data["start_stop_index"] = start_stop_index
-    output_data["groub"] = group_labels
+    output_data["group"] = group_labels + blockinfo["label_counter"]
+    blockinfo["label_counter"] += np.max(group_labels)
 
     return output_data
 
@@ -450,7 +516,6 @@ def post_process_peaks_per_block(
     new_peaks = peaks["pulses"].copy()
 
     # Interpolate raw peak snippets
-    # TODO: DATATYOE TO INT
     if params.postprocessing.enable_resampling:
         log.debug("Resampling peak snippets")
         new_shape = (n_peaks, params.postprocessing.n_resamples)
@@ -525,14 +590,28 @@ def process_dataset(
     # with get_progress() as pbar:
     #     desc = "Processing file"
     #     task = pbar.add_task(desc, total=num_blocks, transient=True)
+    pulse_groub_label_block_counter = 0
+    first_common_median_reference = 0
     for blockiterval, block in enumerate(
         data.blocks(blocksize=blocksize, overlap=overlap)
     ):
+        log.debug(f"Found Groubs {pulse_groub_label_block_counter}")
         blockinfo = {
             "blockiterval": blockiterval,
             "blocksize": blocksize,
             "overlap": overlap,
+            "label_counter": pulse_groub_label_block_counter,
         }
+        if blockiterval == 0:
+            if params.preprocessing.common_median_reference:
+                log.debug("Calculate the firs common median reference")
+                med_ref = get_common_median_reference(block)
+                first_common_median_reference = med_ref
+                block = block - first_common_median_reference
+                params.preprocessing.common_median_reference = False
+        else:
+            log.debug("Takeing the firs common median reference")
+            block = block - first_common_median_reference
 
         block_peaks = detect_peaks_on_block(
             block,
@@ -540,6 +619,7 @@ def process_dataset(
             blockinfo,
             params,
         )
+        pulse_groub_label_block_counter = blockinfo["label_counter"]
 
         if block_peaks is None:
             log.info("Skipping block due to no peaks found")
@@ -617,7 +697,7 @@ def main(
     sensor_layout_path = None
     log.info("Searching for sensor layout file")
     for sensor_layout_name in possible_sensor_layout_names:
-        sensor_layout_path = datapath / sensor_layout_name
+        sensor_layout_path = datapath.parent / sensor_layout_name
         if sensor_layout_path.exists():
             sensor_layout_found = True
             msg = f"Found sensor layout file: {sensor_layout_path}"
@@ -636,10 +716,16 @@ def main(
     params = Params().from_json(str(config_path))
     subdirs = sorted(datapath.glob("*/"))
 
+    if not subdirs:
+        log.debug(
+            "Did not found any subdirectories taking the datapath as directory"
+        )
+        subdirs = [datapath]
+
     for recording_path in subdirs:
         outfile_dir = savepath / recording_path.name
         outfile_dir.mkdir(parents=True, exist_ok=True)
-        outfile_path = outfile_dir / "pulses.h5"
+        outfile_path = outfile_dir / "pulses.nix"
         if outfile_path.exists() and not overwrite:
             log.info(f"File {outfile_path} already exists, skipping.")
             continue
