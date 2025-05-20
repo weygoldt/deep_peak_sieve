@@ -47,12 +47,12 @@ def callbacks(app: Dash) -> None:
 
         save_path = pathlib.Path(filepath["save_path"]) / "config.nix"
 
-        file = nixio.File(str(save_path), nixio.FileMode.Overwrite)
-        sec = file.create_section(
-            "pulse_detection_config", "thunderpulse.pulse_detection.config"
-        )
-        create_metadata_from_dict(current_parms, sec)
-        file.close()
+        # file = nixio.File(str(save_path), nixio.FileMode.Overwrite)
+        # sec = file.create_section(
+        #     "pulse_detection_config", "thunderpulse.pulse_detection.config"
+        # )
+        # create_metadata_from_dict(current_parms, sec)
+        # file.close()
 
         with open(save_path.with_suffix(".json"), "wb") as f:
             f.write(params.to_json())
