@@ -84,6 +84,7 @@ def callbacks(app):
         blockinfo = {
             "blockiterval": 0,
             "blocksize": int(1.0 * d.metadata.samplerate),
+            "label_counter": 0,
             "overlap": 0,
         }
         sliced_data, time_slice = select_data(
