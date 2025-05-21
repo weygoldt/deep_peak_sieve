@@ -47,12 +47,19 @@ class BaseSampler:
     def sample(self) -> list:
         pass
 
+    @abstractmethod
+    def sample_single_file(self, filename) -> list:
+        pass
+
 
 class StratifiedRandomSampler(BaseSampler):
     """Randomly samples peaks from each file in the dataset."""
 
-    def __init__(self, files: list, num_samples: int):
+    def __init__(
+        self, files: list, num_samples: int, prominent_amplitude: bool = False
+    ):
         super().__init__(files, num_samples)
+        self.prominent_amplitude = prominent_amplitude
 
     def sample(self) -> list:
         # Check how many peaks in each file
@@ -77,7 +84,17 @@ class StratifiedRandomSampler(BaseSampler):
                         )
                     block = f.blocks[0]
                     data_array = block.data_arrays["pulses"]
-                    num_samples_per_file.append(data_array.shape[0])
+                    if self.prominent_amplitude:
+                        try:
+                            prominent_pulses = block.data_arrays["prominent_pulses"]
+                        except KeyError:
+                            log.error(
+                                "No boolen Array found for max index please save your config with enable max amplitude on"
+                            )
+                            sys.exit(1)
+                        num_samples_per_file.append(np.sum(prominent_pulses))
+                    else:
+                        num_samples_per_file.append(data_array.shape[0])
             else:
                 log.warning(
                     f"File {file} has unknown file type: {file.suffix}. Skipping."
@@ -119,8 +136,65 @@ class StratifiedRandomSampler(BaseSampler):
 
         return sample_indices
 
+    def sample_single_file(self, filename: str) -> list:
+        file = Path(
+            [file for file in self.files if Path(file).name == filename][0]
+        )
+        if not file.exists:
+            raise FileNotFoundError(f"{file.name} not found")
 
-class MaxAmplitudeSampler(BaseSampler):
+        num_samples_channels = []
+        nixfile = nixio.File(str(file), nixio.FileMode.ReadOnly)
+
+        if len(nixfile.blocks) == 0:
+            log.warning(f"File {file} has no blocks.")
+            exit(1)
+        if len(nixfile.blocks) > 1:
+            log.critical(
+                f"File {file} has more than one block. Using the first one."
+            )
+        block = nixfile.blocks[0]
+        data_array = block.data_arrays["pulses"]
+        channels_unique = np.unique(block.data_arrays["channels"])
+        channels = block.data_arrays["channels"]
+        for ch in channels_unique:
+            num_samples_channels.append(np.sum(channels == ch))
+
+        num_samples_channels = np.array(num_samples_channels)
+        log.info(
+            f"Found {len(num_samples_channels)} files with total of {intword(np.sum(num_samples_channels))} peaks."
+        )
+
+        # Check if the total number of peaks fits the requested number of samples
+        if np.sum(num_samples_channels) < self.num_samples:
+            raise ValueError(
+                f"Not enough samples in the dataset. Found {np.sum(num_samples_channels)}, but requested {self.num_samples}."
+            )
+
+        # Randomly sample peaks from each file to reach the requested number of samples
+        total_frac_per_file = num_samples_channels / np.sum(
+            num_samples_channels
+        )
+        target_samples_per_file = np.round(
+            total_frac_per_file * self.num_samples
+        ).astype(int)
+
+        sample_indices = []
+        with get_progress() as pbar:
+            task = pbar.add_task(
+                "Sampling peaks from each file", total=len(self.files)
+            )
+            for i in range(len(channels_unique)):
+                num_samples = num_samples_channels[i]
+                num_samples_to_sample = target_samples_per_file[i]
+                indices = np.sort(
+                    np.random.randint(0, num_samples, num_samples_to_sample)
+                )
+                sample_indices.append(indices)
+                pbar.update(task, advance=1)
+
+
+class MaxAmplitudeSamplerPerChannel(BaseSampler):
     def __init__(self, files: list, num_samples: int):
         super().__init__(files, num_samples)
 
@@ -147,6 +221,7 @@ class MaxAmplitudeSampler(BaseSampler):
                         )
 
                     block = f.blocks[0]
+
                     try:
                         max_amp = block.data_arrays["pulse_max"]
                     except KeyError:
