@@ -102,7 +102,6 @@ def create_filter_offcanvas() -> dbc.Card:
                                             [
                                                 html.H6(
                                                     "Low cut off [int]",
-                                                    id="h6_bandpass_lowcutoff",
                                                 ),
                                                 dbc.Input(
                                                     type="number",
@@ -115,7 +114,6 @@ def create_filter_offcanvas() -> dbc.Card:
                                                 ),
                                                 html.H6(
                                                     "High cut off [int]",
-                                                    id="h6_bandpass_highcutoff",
                                                 ),
                                                 dbc.Input(
                                                     type="number",
@@ -128,7 +126,6 @@ def create_filter_offcanvas() -> dbc.Card:
                                                 ),
                                                 html.H6(
                                                     "Order of the filter",
-                                                    id="h6_bandpass_order",
                                                 ),
                                                 dbc.Input(
                                                     type="number",

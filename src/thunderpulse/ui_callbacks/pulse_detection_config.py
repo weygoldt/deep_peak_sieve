@@ -53,6 +53,7 @@ def callbacks(app):
             "bandpass": {
                 "lowcut": Input("num_bandpass_lowcutoff", "value"),
                 "highcut": Input("num_bandpass_highcutoff", "value"),
+                "order": Input("num_bandpass_order", "value"),
             },
             "notch": {
                 "notch_freq": Input("num_notchfilter_freq", "value"),
