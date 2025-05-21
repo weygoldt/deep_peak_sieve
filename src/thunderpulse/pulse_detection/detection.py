@@ -480,7 +480,7 @@ def detect_peaks_on_block(
         min_amplitude_pulses_groubs = mark_min_pulse_per_group(
             block_filtered, pulse_list, channels_list, group_labels
         )
-        output_data["pulse_min"] = min_amplitude_pulses_groubs
+        output_data["prominent_pulses"] = min_amplitude_pulses_groubs
 
     window = np.arange(-cutout_window_around_peak, cutout_window_around_peak)
     pulse_indices = pulse_list[:, np.newaxis] + window[np.newaxis, :]
