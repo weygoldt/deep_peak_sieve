@@ -1,6 +1,7 @@
 """Main loop to parse large datasets and collect pulses."""
 
 import gc
+import logging
 import re
 import sys
 from datetime import timedelta
@@ -31,8 +32,10 @@ from thunderpulse.utils.loggers import (
     configure_logging,
     get_logger,
 )
+from thunderpulse.utils.logging_setup import setup_logging
 
 log = get_logger(__name__)
+setup_logging(log)
 app = typer.Typer(pretty_exceptions_show_locals=False)
 
 
@@ -159,7 +162,7 @@ def detect_peaks(
             raise TypeError(msg)
 
         if key == "distance":
-            print(f"Distance: {peak_params[key]}")
+            log.debug(f"Distance: {peak_params[key]}")
 
     # Detect peaks on each channel
     for ch in range(block.shape[1]):
@@ -433,7 +436,7 @@ def main(
     5) Waveform extraction
     6) Dataset saving
     """
-    configure_logging(verbosity=verbose)
+    # configure_logging(verbosity=verbose)
     log.info("Starting ThunderPulse Pulse Detection")
 
     if savepath is None:
