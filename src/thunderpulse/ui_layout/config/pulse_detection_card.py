@@ -73,7 +73,7 @@ def create_pulse_offcanvas() -> dbc.Card:
                                                             "value": True,
                                                         }
                                                     ],
-                                                    id="sw_pulse_highest_amplitude",
+                                                    id=" sw_pulse_promient_amplitude",
                                                     switch=True,
                                                     persistence=True,
                                                     persistence_type="local",

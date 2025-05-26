@@ -110,7 +110,7 @@ class PeakDetectionParameters(KwargsDataclass):
     mode: str = "both"  # 'peak', 'trough', 'both'
     min_peak_distance_s: float = 0.001  # seconds
     cutout_window_around_peak_s: float = 0.005  # seconds
-    take_pulse_with_max_amplitude: bool = False
+    take_pulse_with_prominent_amplitude: bool = False
     distance_channels: float = 50  # distance unit sensoryarray
 
     find_peaks_kwargs: FindPeaksKwargs = field(

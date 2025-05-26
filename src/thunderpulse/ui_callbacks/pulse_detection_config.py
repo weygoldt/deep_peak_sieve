@@ -68,8 +68,8 @@ def callbacks(app):
                 "min_peak_distance_s": Input(
                     "num_pulse_min_peak_distance", "value"
                 ),
-                "take_pulse_with_max_amplitude": Input(
-                    "sw_pulse_highest_amplitude", "value"
+                "take_pulse_with_prominent_amplitude": Input(
+                    " sw_pulse_promient_amplitude", "value"
                 ),
                 "cutout_window_around_peak_s": Input(
                     "num_pulse_waveform", "value"
@@ -135,8 +135,8 @@ def callbacks(app):
             notch=NotchParameters(**notch),
         )
         filters.remove_filters_with_all_none_params()
-        pulse["take_pulse_with_max_amplitude"] = bool(
-            pulse["take_pulse_with_max_amplitude"]
+        pulse["take_pulse_with_prominent_amplitude"] = bool(
+            pulse["take_pulse_with_prominent_amplitude"]
         )
 
         findpeaks = FindPeaksKwargs(**findpeaks)
