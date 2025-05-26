@@ -1,26 +1,21 @@
-import gc
 import sys
-from abc import abstractmethod
 from pathlib import Path
-from typing import Annotated, Sequence
+from typing import Annotated
 
 import matplotlib.pyplot as plt
 import nixio
 import numpy as np
-import orjson
 import typer
 from humanize.number import intword
 from IPython import embed
 from nixio.exceptions import DuplicateName
 from rich.prompt import Confirm
-from sklearn.cluster import HDBSCAN
 
 from thunderpulse.data_handling.data import get_file_list
 from thunderpulse.nn.embedders import UmapEmbedder
 from thunderpulse.utils.loggers import (
     configure_logging,
     get_logger,
-    get_progress,
 )
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
@@ -54,14 +49,14 @@ def main(
     if isinstance(data[0], list):
         data = [item for sublist in data for item in sublist]
 
+    data = list(Path(path).rglob("*.nix"))
     nix_file = nixio.File.open(str(data[0]), nixio.FileMode.ReadWrite)
 
     block = nix_file.blocks[0]
     data_arrays = block.data_arrays
     pulses = data_arrays["pulses"][:]
     channels = data_arrays["channels"][:]
-    pulse_min = data_arrays["pulse_min"][:]
-
+    pulse_min = data_arrays["prominent_pulses"][:]
     pulses_selection = pulses[pulse_min]
     selectes_pulses = channels[pulse_min]
 
