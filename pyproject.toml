@@ -45,6 +45,7 @@ package = true
 [project.scripts]
 detect_pulses = "thunderpulse.pulse_detection.detection:app"
 sample_peaks = "thunderpulse.pulse_filtering.sample_peaks:app"
+sample_peaks_all = "thunderpulse.pulse_filtering.sample_all_pulses_single_file:app"
 label_peaks = "thunderpulse.labeling.label_peaks:app"
 explore = "thunderpulse.exploration:app"
 train_classifier = "thunderpulse.classification.train_classifier:app"

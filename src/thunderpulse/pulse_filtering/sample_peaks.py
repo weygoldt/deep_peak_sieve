@@ -2,7 +2,7 @@ import gc
 import sys
 from abc import abstractmethod
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Sequence
 
 import matplotlib.pyplot as plt
 import nixio
@@ -39,12 +39,15 @@ class BaseSampler:
     """Base class for different peak samplers for labeling peaks."""
 
     # TODO: sample all flag
-    def __init__(self, files: list, num_samples: int):
+    def __init__(
+        self, files: list, num_samples: int, sample_all: bool = False
+    ):
         self.files = files
         self.num_samples = num_samples
+        self.sample_all = sample_all
 
     @abstractmethod
-    def sample(self) -> list:
+    def sample_all_files(self) -> list:
         pass
 
     @abstractmethod
@@ -56,12 +59,16 @@ class StratifiedRandomSampler(BaseSampler):
     """Randomly samples peaks from each file in the dataset."""
 
     def __init__(
-        self, files: list, num_samples: int, prominent_amplitude: bool = False
+        self,
+        files: list,
+        num_samples: int,
+        sample_all: bool = False,
+        prominent_amplitude: bool = False,
     ):
-        super().__init__(files, num_samples)
+        super().__init__(files, num_samples, sample_all)
         self.prominent_amplitude = prominent_amplitude
 
-    def sample(self) -> list:
+    def sample_all_files(self) -> list:
         # Check how many peaks in each file
         num_samples_per_file = []
         # with get_progress() as pbar:
@@ -86,10 +93,13 @@ class StratifiedRandomSampler(BaseSampler):
                     data_array = block.data_arrays["pulses"]
                     if self.prominent_amplitude:
                         try:
-                            prominent_pulses = block.data_arrays["prominent_pulses"]
+                            prominent_pulses = block.data_arrays[
+                                "prominent_pulses"
+                            ]
                         except KeyError:
-                            log.error(
-                                "No boolen Array found for max index please save your config with enable max amplitude on"
+                            log.exception(
+                                "No boolen Array found for max index please "
+                                "save your config with enable max amplitude on"
                             )
                             sys.exit(1)
                         num_samples_per_file.append(np.sum(prominent_pulses))
@@ -100,41 +110,7 @@ class StratifiedRandomSampler(BaseSampler):
                     f"File {file} has unknown file type: {file.suffix}. Skipping."
                 )
                 # pbar.update(task, advance=1)
-
-        num_samples_per_file = np.array(num_samples_per_file)
-        log.info(
-            f"Found {len(num_samples_per_file)} files with total of {intword(np.sum(num_samples_per_file))} peaks."
-        )
-
-        # Check if the total number of peaks fits the requested number of samples
-        if np.sum(num_samples_per_file) < self.num_samples:
-            raise ValueError(
-                f"Not enough samples in the dataset. Found {np.sum(num_samples_per_file)}, but requested {self.num_samples}."
-            )
-
-        # Randomly sample peaks from each file to reach the requested number of samples
-        total_frac_per_file = num_samples_per_file / np.sum(
-            num_samples_per_file
-        )
-        target_samples_per_file = np.round(
-            total_frac_per_file * self.num_samples
-        ).astype(int)
-
-        sample_indices = []
-        with get_progress() as pbar:
-            task = pbar.add_task(
-                "Sampling peaks from each file", total=len(self.files)
-            )
-            for i in range(len(self.files)):
-                num_samples = num_samples_per_file[i]
-                num_samples_to_sample = target_samples_per_file[i]
-                indices = np.sort(
-                    np.random.randint(0, num_samples, num_samples_to_sample)
-                )
-                sample_indices.append(indices)
-                pbar.update(task, advance=1)
-
-        return sample_indices
+        return self._get_sample_indices(num_samples_per_file, self.files)
 
     def sample_single_file(self, filename: str) -> list:
         file = Path(
@@ -157,114 +133,55 @@ class StratifiedRandomSampler(BaseSampler):
         data_array = block.data_arrays["pulses"]
         channels_unique = np.unique(block.data_arrays["channels"])
         channels = block.data_arrays["channels"]
+
         for ch in channels_unique:
-            num_samples_channels.append(np.sum(channels == ch))
-
-        num_samples_channels = np.array(num_samples_channels)
-        log.info(
-            f"Found {len(num_samples_channels)} files with total of {intword(np.sum(num_samples_channels))} peaks."
-        )
-
-        # Check if the total number of peaks fits the requested number of samples
-        if np.sum(num_samples_channels) < self.num_samples:
-            raise ValueError(
-                f"Not enough samples in the dataset. Found {np.sum(num_samples_channels)}, but requested {self.num_samples}."
-            )
-
-        # Randomly sample peaks from each file to reach the requested number of samples
-        total_frac_per_file = num_samples_channels / np.sum(
-            num_samples_channels
-        )
-        target_samples_per_file = np.round(
-            total_frac_per_file * self.num_samples
-        ).astype(int)
-
-        sample_indices = []
-        with get_progress() as pbar:
-            task = pbar.add_task(
-                "Sampling peaks from each file", total=len(self.files)
-            )
-            for i in range(len(channels_unique)):
-                num_samples = num_samples_channels[i]
-                num_samples_to_sample = target_samples_per_file[i]
-                indices = np.sort(
-                    np.random.randint(0, num_samples, num_samples_to_sample)
-                )
-                sample_indices.append(indices)
-                pbar.update(task, advance=1)
-
-
-class MaxAmplitudeSamplerPerChannel(BaseSampler):
-    def __init__(self, files: list, num_samples: int):
-        super().__init__(files, num_samples)
-
-    def sample(self) -> list:
-        # Check how many peaks in each file
-        num_samples_per_file = []
-        # with get_progress() as pbar:
-        #     task = pbar.add_task(
-        #         "Collecting number of samples per file", total=len(self.files)
-        #     )
-        for file in self.files:
-            if file.suffix == ".npz":
-                data = np.load(file)
-                key = list(data.keys())[0]
-                num_samples_per_file.append(len(data[key]))
-            elif file.suffix in [".nix", ".h5"]:
-                with nixio.File.open(str(file), nixio.FileMode.ReadOnly) as f:
-                    if len(f.blocks) == 0:
-                        log.warning(f"File {file} has no blocks.")
-                        continue
-                    if len(f.blocks) > 1:
-                        log.critical(
-                            f"File {file} has more than one block. Using the first one."
-                        )
-
-                    block = f.blocks[0]
-
-                    try:
-                        max_amp = block.data_arrays["pulse_max"]
-                    except KeyError:
-                        log.error(
-                            "No boolen Array found for max index please save your config with enable max amplitude on"
-                        )
-                        sys.exit(1)
-                    num_samples_per_file.append(np.sum(max_amp))
+            if self.prominent_amplitude:
+                channel_index = channels == ch
+                try:
+                    prominent_pulses = block.data_arrays["prominent_pulses"]
+                    prom_pulses = prominent_pulses[channel_index]
+                    num_samples_channels.append(np.sum(prom_pulses))
+                except KeyError:
+                    log.exception(
+                        """No boolen Array found for prominent index please
+                        save your config with enable prominent amplitude on"""
+                    )
+                    sys.exit(1)
             else:
-                log.warning(
-                    f"File {file} has unknown file type: {file.suffix}. Skipping."
-                )
-                # pbar.update(task, advance=1)
+                num_samples_channels.append(np.sum(channels[:] == ch))
 
-        num_samples_per_file = np.array(num_samples_per_file)
+        return self._get_sample_indices(num_samples_channels, channels_unique)
+
+    def _get_sample_indices(
+        self, num_samples: Sequence[int], sampling_from: list
+    ) -> list:
         log.info(
-            f"Found {len(num_samples_per_file)} files with total of {intword(np.sum(num_samples_per_file))} peaks."
+            f"Found {len(num_samples)} files with total of {intword(np.sum(num_samples))} peaks."
         )
 
         # Check if the total number of peaks fits the requested number of samples
-        if np.sum(num_samples_per_file) < self.num_samples:
+        if np.sum(num_samples) < self.num_samples:
             raise ValueError(
-                f"Not enough samples in the dataset. Found {np.sum(num_samples_per_file)}, but requested {self.num_samples}."
+                f"Not enough samples in the dataset. Found "
+                f"{np.sum(num_samples)}, but requested "
+                f"{self.num_samples}."
             )
 
         # Randomly sample peaks from each file to reach the requested number of samples
-        total_frac_per_file = num_samples_per_file / np.sum(
-            num_samples_per_file
-        )
-        target_samples_per_file = np.round(
-            total_frac_per_file * self.num_samples
-        ).astype(int)
+        total_frac = num_samples / np.sum(num_samples)
+        target_samples = np.round(total_frac * self.num_samples).astype(int)
 
         sample_indices = []
         with get_progress() as pbar:
             task = pbar.add_task(
-                "Sampling peaks from each file", total=len(self.files)
+                "Sampling pulses from each channel", total=len(sampling_from)
             )
-            for i in range(len(self.files)):
-                num_samples = num_samples_per_file[i]
-                num_samples_to_sample = target_samples_per_file[i]
+            for i in range(len(sampling_from)):
+                num_samples_to_sample = target_samples[i]
                 indices = np.sort(
-                    np.random.randint(0, num_samples, num_samples_to_sample)
+                    np.random.choice(
+                        num_samples[i], num_samples_to_sample, replace=False
+                    )
                 )
                 sample_indices.append(indices)
                 pbar.update(task, advance=1)
@@ -291,7 +208,7 @@ def main(
     num_samples: Annotated[
         int,
         typer.Option(
-            "--num_samples", "-n", help="Number of total samples to draw"
+            "--num-samples", "-n", help="Number of total samples to draw"
         ),
     ] = 100,
     force: Annotated[
@@ -300,6 +217,22 @@ def main(
             "--force",
             "-f",
             help="Force creating the samples.json file, overwriting existing files",
+        ),
+    ] = False,
+    singe_file: Annotated[
+        bool,
+        typer.Option(
+            "--single-file",
+            "-s",
+            help="Sample only from a single file",
+        ),
+    ] = False,
+    sample_all: Annotated[
+        bool,
+        typer.Option(
+            "--sample-all",
+            "-a",
+            help="Take all samples",
         ),
     ] = False,
     verbose: Annotated[
@@ -319,10 +252,26 @@ def main(
     log.info(f"Found {len(data)} files in the dataset.")
 
     # sampler = StratifiedRandomSampler(data, num_samples=num_samples)
-    sampler = MaxAmplitudeSampler(data, num_samples)
+    sampler = StratifiedRandomSampler(data, num_samples, sample_all=sample_all)
 
     log.info(f"Sampling {num_samples} peaks from {len(data)} files.")
-    sample_indices = sampler.sample()
+
+    if singe_file:
+        log.info("Taking the first pulses.nix file")
+        sample_indices = sampler.sample_single_file(data[0].name)
+        sample_indices = [i.tolist() for i in sample_indices]
+        data = [str(file.resolve()) for file in data]
+
+    else:
+        sample_indices = sampler.sample_all_files()
+        sample_indices_index = [
+            x for x in range(len(sample_indices)) if len(sample_indices[x]) > 0
+        ]
+        sample_indices = [
+            sample_indices[i].tolist() for i in sample_indices_index
+        ]
+        data = [data[i] for i in sample_indices_index]
+        data = [str(file.resolve()) for file in data]
 
     savepath = None
     if dtype == "file" or dtype in ["dir", "subdir"]:
@@ -331,12 +280,6 @@ def main(
         raise ValueError(f"Unknown dataset type: {dtype}")
     savepath = savepath.with_suffix(".json")
 
-    sample_indices_index = [
-        x for x in range(len(sample_indices)) if len(sample_indices[x]) > 0
-    ]
-    sample_indices = [sample_indices[i].tolist() for i in sample_indices_index]
-    data = [data[i] for i in sample_indices_index]
-    data = [str(file.resolve()) for file in data]
     # TODO: In Nix file
 
     json_data = {
@@ -357,7 +300,7 @@ def main(
         overwrite = True
 
     log.info("Collecting samples from each file.")
-    outfile = savepath.with_suffix(".h5")
+    outfile = savepath.with_suffix(".nix")
 
     if overwrite:
         outfile.unlink(missing_ok=True)
@@ -371,51 +314,53 @@ def main(
     else:
         sys.exit()
 
-    for i in range(len(sample_indices)):
-        indices = np.sort(sample_indices[i])
-        file = data[i]
-        n = len(indices)
-        files = [file] * n
+    if singe_file:
+        file = data[0]
+        for i in range(len(sample_indices)):
+            indices = np.sort(sample_indices[i])
+            log.info(f"Collecting {indices.size} samples from channel {i}.")
+            f = nixio.File.open(str(file), nixio.FileMode.ReadOnly)
+            if not check_nixfile(f, file):
+                msg = f"File {file} is not a valid NIX file. Exiting."
+                raise ValueError(msg)
+            block = f.blocks[0]
+            channels = block.data_arrays["channels"][:]
+            ch_indices = np.sort(np.where(channels == i)[0])
+            selected_indices = ch_indices[indices]
+            for arr in block.data_arrays:
+                name = arr.name
+                if len(arr.shape) > 1:
+                    arr = arr[:]
+                vals = arr[selected_indices]
+                data_array = sample_block.create_data_array(
+                    f"{name}_{i}", "samples", data=vals
+                )
+    else:
+        for i in range(len(sample_indices)):
+            indices = np.sort(sample_indices[i])
+            file = data[i]
+            n = len(indices)
+            files = [file] * n
+            log.info(f"Collecting {n} samples from {file}.")
+            f = nixio.File.open(str(file), nixio.FileMode.ReadOnly)
+            if not check_nixfile(f, file):
+                msg = f"File {file} is not a valid NIX file. Exiting."
+                raise ValueError(msg)
+            block = f.blocks[0]
+            for arr in block.data_arrays:
+                name = arr.name
+                bindices = np.zeros(arr.shape[0], dtype=bool)
+                bindices[indices] = True
+                vals = arr[bindices]
+                if i == 0:
+                    data_array = sample_block.create_data_array(
+                        name, "samples", data=vals
+                    )
+                else:
+                    data_array = sample_block.data_arrays[name]
+                    data_array.append(vals)
 
-        log.info(f"Collecting {n} samples from {file}.")
-        if Path(file).suffix in [".nix", ".h5"]:
-            with nixio.File.open(str(file), nixio.FileMode.ReadOnly) as f:
-                if not check_nixfile(f, file):
-                    msg = f"File {file} is not a valid NIX file. Exiting."
-                    raise ValueError(msg)
-                block = f.blocks[0]
-                for arr in block.data_arrays:
-                    name = arr.name
-                    bindices = np.zeros(arr.shape[0], dtype=bool)
-                    bindices[indices] = True
-                    vals = arr[bindices]
-                    # # TODO: This is super ugly but I did not find another working way
-                    # if len(arr.shape) == 1:
-                    #     vals = arr[bindices]
-                    # elif len(arr.shape) == 3:
-                    #     try:
-                    #         vals = arr[bindices, :, :]
-                    #     except Exception as e:
-                    #         embed()
-                    #         exit()
-                    # else:
-                    #     msg = f"Array has unexpected shape: {arr.shape}"
-                    #     raise ValueError(msg)
-                    #
-                    if i == 0:
-                        data_array = sample_block.create_data_array(
-                            name, "samples", data=vals
-                        )
-                    else:
-                        data_array = sample_block.data_arrays[name]
-                        data_array.append(vals)
-
-        else:
-            log.warning(
-                f"File {file} has unknown file type: {Path(file).suffix}. Skipping."
-            )
-            continue
-        gc.collect()
+            gc.collect()
 
     # Close the file for now
     log.info("Extracted samples from all files, closing the file.")

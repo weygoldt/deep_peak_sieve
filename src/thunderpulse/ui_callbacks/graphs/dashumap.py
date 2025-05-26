@@ -1,4 +1,5 @@
 import copy
+import logging
 from pathlib import Path
 
 import nixio
@@ -11,6 +12,11 @@ from shapely import Point, Polygon
 from sklearn.cluster import HDBSCAN
 
 from thunderpulse.data_handling.data import load_data
+from thunderpulse.utils.loggers import get_logger
+from thunderpulse.utils.logging_setup import setup_logging
+
+log = get_logger(__name__)
+setup_logging(log)
 
 
 def default_umap_figure():
@@ -30,10 +36,12 @@ def callbacks_umap(app):
         Output("umap", "figure"),
         Input("vis_tabs", "active_tab"),
         Input("filepath", "data"),
+        Input("select_umap_embedding", "value"),
     )
     def create_umap_embeding(
         tabs,
         filepath,
+        umap_embedding,
     ):
         if tabs and tabs != "tab_umap":
             return default_umap_figure()
@@ -44,15 +52,17 @@ def callbacks_umap(app):
 
         d = load_data(**filepath)
 
-        save_path = list(Path(d.paths.save_path).glob("*pulses_samples*"))
+        save_path = list(Path(d.paths.save_path).glob("*pulses.*"))
         save_file = [p for p in save_path if p.suffix in [".nix", ".h5"]][0]
 
         if not save_file.exists:
             return default_umap_figure()
         nix_file = nixio.File(str(save_file), nixio.FileMode.ReadOnly)
-
         block = nix_file.blocks[0]
-        embedding = block.data_arrays["umap_embedding"]
+        if not umap_embedding:
+            log.debug("No umap embedding selected, or found")
+            return default_umap_figure()
+        embedding = block.data_arrays[f"{umap_embedding}"]
 
         fig = go.Figure(
             data=go.Scattergl(
@@ -84,8 +94,11 @@ def callbacks_umap(app):
         Input("umap", "selectedData"),
         Input("umap", "figure"),
         Input("store_umap_selection", "data"),
+        Input("select_umap_embedding", "value"),
     )
-    def plot_selected_umap_embedding(filepath, data, figure, saved_selections):
+    def plot_selected_umap_embedding(
+        filepath, data, figure, saved_selections, umap_embedding
+    ):
         if not data:
             fig = default_umap_figure()
             return fig, None
@@ -106,15 +119,30 @@ def callbacks_umap(app):
 
         d = load_data(**filepath)
 
-        save_path = list(Path(d.paths.save_path).glob("*pulses_samples*"))
+        save_path = list(Path(d.paths.save_path).glob("*pulses*"))
         save_file = [p for p in save_path if p.suffix in [".nix", ".h5"]][0]
         if not save_file.exists():
             return default_umap_figure()
 
         nix_file = nixio.File(str(save_file), nixio.FileMode.ReadOnly)
         block = nix_file.blocks[0]
+
+        if not umap_embedding:
+            log.debug("No umap embedding selected, or found")
+            return default_umap_figure()
+
+        embedding = block.data_arrays[f"{umap_embedding}"]
+        data_arrays = block.data_arrays
+
+        pulses = data_arrays["pulses"]
+        channels = data_arrays["channels"][:]
+        pulse_min = data_arrays["pulse_min"][:]
+        embed()
+
+        pulses_selection = pulses[pulse_min]
+        selectes_pulses = channels[pulse_min]
+
         pulse = block.data_arrays["pulses"]
-        # mean_pulses = block.data_arrays["mean_pulses"]
         channels = block.data_arrays["channels"]
 
         colors = px.colors.qualitative.Vivid[: len(current_umap_selections)]

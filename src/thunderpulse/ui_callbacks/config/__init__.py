@@ -1,1 +1,9 @@
-from . import detection_card, filter_card, offcanvas, path_card, load, save
+from . import (
+    classifcation_card,
+    detection_card,
+    filter_card,
+    load,
+    offcanvas,
+    path_card,
+    save,
+)

@@ -35,7 +35,49 @@ def create_classification_offcanvas() -> dbc.Card:
                     outline=True,
                 ),
                 html.Br(),
-
+                dbc.Card(
+                    [
+                        dbc.CardHeader(
+                            "Umap Selection",
+                            style={"textAlign": "center"},
+                        ),
+                        dbc.CardBody(
+                            [
+                                html.H6(
+                                    "Which umap embedding",
+                                ),
+                                dbc.Select(
+                                    id="select_umap_embedding",
+                                    options=[],
+                                    persistence=True,
+                                    persistence_type="local",
+                                ),
+                                html.H6(
+                                    "Unit Name",
+                                ),
+                                dbc.Input(
+                                    type="number",
+                                    placeholder="float",
+                                    min=0,
+                                    id="num_umap_unit_name",
+                                    style={"width": "70%"},
+                                    persistence=True,
+                                    persistence_type="local",
+                                ),
+                                html.Br(),
+                                dbc.Button(
+                                    "Save Unit",
+                                    color="info",
+                                    id="bt_umap_save_unit",
+                                    n_clicks=0,
+                                ),
+                            ]
+                        ),
+                    ],
+                    color="primary",
+                    outline=True,
+                ),
+                html.Br(),
             ],
         )
     )

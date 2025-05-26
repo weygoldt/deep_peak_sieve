@@ -96,7 +96,7 @@ def main(
     ui_callbacks.config.offcanvas.callbacks(app)
     ui_callbacks.config.load.callbacks(app)
     ui_callbacks.config.save.callbacks(app)
-
+    ui_callbacks.config.classifcation_card.callbacks(app)
 
     ui_callbacks.pulse_detection_config.callbacks(app)
     ui_callbacks.channel_slider.callbacks(app)
