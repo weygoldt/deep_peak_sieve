@@ -473,7 +473,7 @@ def detect_peaks_on_block(
     group_labels = labels[good_pulse_bool]
 
     # TODO: Make this an option for what polarity
-    if params.peaks.take_pulse_with_max_amplitude:
+    if params.peaks.take_pulse_with_prominent_amplitude:
         log.debug(
             "Creating bool for pulse in groubs that have the minimum amplitude"
         )
@@ -544,7 +544,7 @@ def post_process_peaks_per_block(
     if params.postprocessing.enable_normalization:
         log.debug("Normalizing peak snippets")
         # Normalize peak snippets
-        norm = np.max(new_peaks, axis=1)
+        norm = np.max(np.abs(new_peaks), axis=1)
         new_peaks = new_peaks / norm[:, np.newaxis]
 
     if params.postprocessing.enable_centering:
