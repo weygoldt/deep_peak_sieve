@@ -52,8 +52,14 @@ def callbacks_umap(app):
 
         d = load_data(**filepath)
 
-        save_path = list(Path(d.paths.save_path).glob("*pulses.*"))
-        save_file = [p for p in save_path if p.suffix in [".nix", ".h5"]][0]
+        save_path = list(Path(d.paths.save_path).rglob("*pulses.*"))
+
+        try:
+            save_file = [p for p in save_path if p.suffix in [".nix", ".h5"]][
+                0
+            ]
+        except IndexError:
+            return default_umap_figure
 
         if not save_file.exists:
             return default_umap_figure()
@@ -109,17 +115,17 @@ def callbacks_umap(app):
             fig = default_umap_figure()
             return fig, None
 
-        current_umap_selections = {
+        umap_selections = {
             f"{i}": s
             for i, s in enumerate(figure["layout"]["selections"])
             if figure["layout"]["selections"]
         }
         if not saved_selections:
-            saved_selections = copy.deepcopy(current_umap_selections)
+            saved_selections = copy.deepcopy(umap_selections)
 
         d = load_data(**filepath)
 
-        save_path = list(Path(d.paths.save_path).glob("*pulses*"))
+        save_path = list(Path(d.paths.save_path).rglob("*pulses.*"))
         save_file = [p for p in save_path if p.suffix in [".nix", ".h5"]][0]
         if not save_file.exists():
             return default_umap_figure()
@@ -134,105 +140,118 @@ def callbacks_umap(app):
         embedding = block.data_arrays[f"{umap_embedding}"]
         data_arrays = block.data_arrays
 
+        data_indeces = np.sort([d["pointIndex"] for d in data["points"]])
+        if data_indeces.shape[0] > 300:
+            plot_data_indeces = np.sort(
+                np.random.choice(len(data["points"]), 300, replace=False)
+            )
+        else:
+            plot_data_indeces = data_indeces
+
         pulses = data_arrays["pulses"]
         channels = data_arrays["channels"][:]
-        pulse_min = data_arrays["pulse_min"][:]
-        embed()
+        current_channel = int(umap_embedding.split("_")[-1])
+        selected_channel = current_channel == channels
 
-        pulses_selection = pulses[pulse_min]
-        selectes_pulses = channels[pulse_min]
+        try:
+            pulse_min = data_arrays["prominent_pulses"][:]
+        except KeyError:
+            pulse_min = np.ones_like(channels, dtype=np.bool)
 
-        pulse = block.data_arrays["pulses"]
-        channels = block.data_arrays["channels"]
+        indeces_pulses = np.where((pulse_min & selected_channel))[0]
+        colors = px.colors.qualitative.Vivid[: len(umap_selections)]
 
-        colors = px.colors.qualitative.Vivid[: len(current_umap_selections)]
         fig = go.Figure()
+        vertices_current_selection = get_vertices_current_selection(data)
+        polygon_current_selection = Polygon(vertices_current_selection)
 
-        for i, (key, s) in enumerate(current_umap_selections.items()):
-            if s["type"] == "rect" and "range" in data.keys():
-                vertices = np.array(
-                    [
-                        [s["x0"], s["y1"]],
-                        [s["x0"], s["y0"]],
-                        [s["x1"], s["y0"]],
-                        [s["x1"], s["y1"]],
-                        [s["x0"], s["y1"]],
-                    ]
-                )
-                current_selection = np.array(
-                    [
-                        [data["range"]["x"][0], data["range"]["y"][0]],
-                        [data["range"]["x"][0], data["range"]["y"][1]],
-                        [data["range"]["x"][1], data["range"]["y"][1]],
-                        [data["range"]["x"][1], data["range"]["y"][0]],
-                        [data["range"]["x"][0], data["range"]["y"][0]],
-                    ]
-                )
+        log.debug(
+            f"Current selection bounds {polygon_current_selection.bounds}"
+        )
 
-            elif s["type"] == "path" and "lassoPoints" in data.keys():
-                vertices = parse_lasso_path(s["path"])
-                current_selection = np.hstack(
-                    (
-                        np.array(data["lassoPoints"]["x"]).reshape(-1, 1),
-                        np.array(data["lassoPoints"]["y"]).reshape(-1, 1),
+        for i, (umap_selection_index, umap_selection_data) in enumerate(
+            umap_selections.items()
+        ):
+            vertices_umap_selection = get_vertices_umap_selection(
+                umap_selection_data
+            )
+            polygon_umap_selection = Polygon(vertices_umap_selection)
+            log.debug(f"Umap selection Bounds {polygon_umap_selection.bounds}")
+            same_bounds = np.allclose(
+                np.array(polygon_current_selection.bounds),
+                np.array(polygon_umap_selection.bounds),
+            )
+            log.debug(same_bounds)
+            if umap_selection_index in saved_selections:
+                if len(figure["layout"]["selections"]) == 1:
+                    log.debug("UpdatingSingle Selection")
+                    upper, low, mean_wf = calc_mean_wavforms_from_umap(
+                        pulses, indeces_pulses[data_indeces]
                     )
-                ).reshape(-1, 2)
-                if np.all(current_selection[-1] == vertices[0]):
-                    vertices = np.vstack((vertices, vertices[0]))
-            else:
-                vertices = np.zeros((1, 1))
-                current_selection = np.zeros((2, 1))
+                    saved_selections[umap_selection_index]["mean_wf"] = mean_wf
+                    saved_selections[umap_selection_index]["upper"] = upper
+                    saved_selections[umap_selection_index]["lower"] = low
+                    fig = plot_mean_waveforms_from_umap(
+                        fig,
+                        low,
+                        upper,
+                        mean_wf,
+                        d.metadata.samplerate,
+                        pulses[indeces_pulses[plot_data_indeces]],
+                        colors[i],
+                        colors[i],
+                    )
+                elif same_bounds:
+                    log.debug("Updating reocurring selection")
 
-            if vertices.shape[0] != current_selection.shape[0] and np.all(
-                vertices[0] == current_selection[0]
-            ):
-                std_upper = saved_selections[key]["std_upper"]
-                std_lower = saved_selections[key]["std_lower"]
-                mean_wf = saved_selections[key]["mean_wf"]
-                # fig = plot_mean_waveforms_from_umap(
-                #     fig,
-                #     std_lower,
-                #     std_upper,
-                #     mean_wf,
-                #     mean_pulses[
-                #     d.metadata.samplerate,
-                #     color1=colors[i],
-                #     color2="grey",
-                #
-                # )
-            else:
-                poly = Polygon(current_selection)
-                data_frame = [
-                    d
-                    for d in data["points"]
-                    if poly.contains(Point(d["x"], d["y"]))
-                ]
-
-                std_upper, std_lower, mean_wf = calc_mean_wavforms_from_umap(
-                    pulse,
-                    # channels,
-                    data_frame,
-                    d.metadata.samplerate,
-                )
-                if key not in saved_selections.keys():
-                    saved_selections[key] = current_umap_selections[key]
+                    upper, low, mean_wf = calc_mean_wavforms_from_umap(
+                        pulses, indeces_pulses[data_indeces]
+                    )
+                    saved_selections[umap_selection_index]["mean_wf"] = mean_wf
+                    saved_selections[umap_selection_index]["upper"] = upper
+                    saved_selections[umap_selection_index]["lower"] = low
+                    fig = plot_mean_waveforms_from_umap(
+                        fig,
+                        low,
+                        upper,
+                        mean_wf,
+                        d.metadata.samplerate,
+                        pulses[indeces_pulses[plot_data_indeces]],
+                        colors[i],
+                        colors[i],
+                    )
                 else:
-                    del saved_selections[key]
-                    saved_selections[key] = current_umap_selections[key]
-                saved_selections[key]["std_upper"] = std_upper
-                saved_selections[key]["std_lower"] = std_lower
-                saved_selections[key]["mean_wf"] = mean_wf
-                index = np.sort([d["pointIndex"] for d in data_frame])
+                    mean_wf = saved_selections[umap_selection_index]["mean_wf"]
+                    upper = saved_selections[umap_selection_index]["upper"]
+                    low = saved_selections[umap_selection_index]["lower"]
+                    log.debug("Taking Saved selection")
+                    fig = plot_only_mean_waveforms_from_umap(
+                        fig,
+                        low,
+                        upper,
+                        mean_wf,
+                        d.metadata.samplerate,
+                        colors[i],
+                    )
+            else:
+                saved_selections[umap_selection_index] = umap_selection_data
+                upper, low, mean_wf = calc_mean_wavforms_from_umap(
+                    pulses, indeces_pulses[data_indeces]
+                )
+                saved_selections[umap_selection_index]["mean_wf"] = mean_wf
+                saved_selections[umap_selection_index]["upper"] = upper
+                saved_selections[umap_selection_index]["lower"] = low
                 fig = plot_mean_waveforms_from_umap(
                     fig,
-                    std_lower,
-                    std_upper,
+                    low,
+                    upper,
                     mean_wf,
                     d.metadata.samplerate,
-                    pulse[index, :],
-                    color1=colors[i],
-                    color2="grey",
+                    pulses[indeces_pulses[plot_data_indeces]],
+                    colors[i],
+                    colors[i],
                 )
+                log.debug("creating saved selection")
 
         fig.update_layout(
             template="plotly_dark",
@@ -240,6 +259,98 @@ def callbacks_umap(app):
             clickmode="event+select",
         )
         return fig, saved_selections
+        # for i, (key, s) in enumerate(current_umap_selections.items()):
+        #     if s["type"] == "rect" and "range" in data.keys():
+        # vertices = np.array(
+        #     [
+        #         [s["x0"], s["y1"]],
+        #         [s["x0"], s["y0"]],
+        #         [s["x1"], s["y0"]],
+        #         [s["x1"], s["y1"]],
+        #         [s["x0"], s["y1"]],
+        #     ]
+        # )
+        # current_selection = np.array(
+        #     [
+        #         [data["range"]["x"][0], data["range"]["y"][0]],
+        #         [data["range"]["x"][0], data["range"]["y"][1]],
+        #         [data["range"]["x"][1], data["range"]["y"][1]],
+        #         [data["range"]["x"][1], data["range"]["y"][0]],
+        #         [data["range"]["x"][0], data["range"]["y"][0]],
+        #     ]
+        # )
+        #
+        #     elif s["type"] == "path" and "lassoPoints" in data.keys():
+        #         vertices = parse_lasso_path(s["path"])
+        # current_selection = np.hstack(
+        #     (
+        #         np.array(data["lassoPoints"]["x"]).reshape(-1, 1),
+        #         np.array(data["lassoPoints"]["y"]).reshape(-1, 1),
+        #     )
+        # ).reshape(-1, 2)
+        #         if np.all(current_selection[-1] == vertices[0]):
+        #             vertices = np.vstack((vertices, vertices[0]))
+        #     else:
+        #         vertices = np.zeros((1, 1))
+        #         current_selection = np.zeros((2, 1))
+        #
+        #     if vertices.shape[0] != current_selection.shape[0] and np.all(
+        #         vertices[0] == current_selection[0]
+        #     ):
+        #         std_upper = saved_selections[key]["std_upper"]
+        #         std_lower = saved_selections[key]["std_lower"]
+        #         mean_wf = saved_selections[key]["mean_wf"]
+        #         # fig = plot_mean_waveforms_from_umap(
+        #         #     fig,
+        #         #     std_lower,
+        #         #     std_upper,
+        #         #     mean_wf,
+        #         #     mean_pulses[
+        #         #     d.metadata.samplerate,
+        #         #     color1=colors[i],
+        #         #     color2="grey",
+        #         #
+        #         # )
+        #     else:
+        #         poly = Polygon(current_selection)
+        #         data_frame = [
+        #             d
+        #             for d in data["points"]
+        #             if poly.contains(Point(d["x"], d["y"]))
+        #         ]
+        #
+        #         std_upper, std_lower, mean_wf = calc_mean_wavforms_from_umap(
+        #             pulse,
+        #             # channels,
+        #             data_frame,
+        #             d.metadata.samplerate,
+        #         )
+        #         if key not in saved_selections.keys():
+        #             saved_selections[key] = current_umap_selections[key]
+        #         else:
+        #             del saved_selections[key]
+        #             saved_selections[key] = current_umap_selections[key]
+        #         saved_selections[key]["std_upper"] = std_upper
+        #         saved_selections[key]["std_lower"] = std_lower
+        #         saved_selections[key]["mean_wf"] = mean_wf
+        #         index = np.sort([d["pointIndex"] for d in data_frame])
+        #         fig = plot_mean_waveforms_from_umap(
+        #             fig,
+        #             std_lower,
+        #             std_upper,
+        #             mean_wf,
+        #             d.metadata.samplerate,
+        #             pulse[index, :],
+        #             color1=colors[i],
+        #             color2="grey",
+        #         )
+        #
+        # fig.update_layout(
+        #     template="plotly_dark",
+        #     margin=dict(l=0, r=0, t=0, b=0),
+        #     clickmode="event+select",
+        # )
+        # return fig, saved_selections
 
 
 #     @app.callback(
@@ -417,10 +528,7 @@ def callbacks_umap(app):
 #     return fig
 #
 #
-def calc_mean_wavforms_from_umap(pulses, data, sample_rate):
-    index = np.sort([d["pointIndex"] for d in data])
-    # mean_wf = np.mean(pulses[index][channels[index]], axis=0)
-    # std_wf = np.std(pulses[index][channels[index]], axis=0)
+def calc_mean_wavforms_from_umap(pulses, index):
     mean_wf = np.mean(pulses[index], axis=0)
     std_wf = np.std(pulses[index], axis=0)
     upper = mean_wf + std_wf
@@ -467,6 +575,34 @@ def plot_mean_waveforms_from_umap(
     return fig
 
 
+def plot_only_mean_waveforms_from_umap(
+    fig, low, upper, mean_wf, sample_rate, color1
+):
+    time_slice = np.arange(len(mean_wf)) / sample_rate
+    fig.add_trace(
+        go.Scattergl(
+            name="upper",
+            x=np.concatenate([time_slice, time_slice[::-1]]),
+            y=np.concatenate([upper, low[::-1]]),
+            mode="lines",
+            showlegend=False,
+            fill="toself",
+            marker_color=color1,
+            opacity=0.8,
+        )
+    )
+    fig.add_trace(
+        go.Scattergl(
+            x=time_slice,
+            y=mean_wf,
+            mode="lines",
+            marker_color=color1,
+        ),
+    )
+
+    return fig
+
+
 def parse_lasso_path(path_data):
     """Convert SVG path string to array of polygon vertices"""
     vertices = []
@@ -485,3 +621,42 @@ def parse_lasso_path(path_data):
             except ValueError:
                 continue
     return np.array(vertices)
+
+
+def get_vertices_current_selection(data) -> np.ndarray:
+    if "range" in data.keys():
+        current_selection = np.array(
+            [
+                [data["range"]["x"][0], data["range"]["y"][0]],
+                [data["range"]["x"][0], data["range"]["y"][1]],
+                [data["range"]["x"][1], data["range"]["y"][1]],
+                [data["range"]["x"][1], data["range"]["y"][0]],
+                [data["range"]["x"][0], data["range"]["y"][0]],
+            ]
+        )
+
+    else:
+        current_selection = np.hstack(
+            (
+                np.array(data["lassoPoints"]["x"]).reshape(-1, 1),
+                np.array(data["lassoPoints"]["y"]).reshape(-1, 1),
+            )
+        ).reshape(-1, 2)
+    return current_selection
+
+
+def get_vertices_umap_selection(data) -> np.ndarray:
+    if data["type"] == "rect":
+        vertices = np.array(
+            [
+                [data["x0"], data["y0"]],
+                [data["x0"], data["y1"]],
+                [data["x1"], data["y1"]],
+                [data["x1"], data["y0"]],
+                [data["x0"], data["y0"]],
+            ]
+        )
+    else:
+        vertices = parse_lasso_path(data["path"])
+
+    return vertices

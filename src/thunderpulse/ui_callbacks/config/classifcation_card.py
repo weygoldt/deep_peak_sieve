@@ -3,7 +3,6 @@ from pathlib import Path
 import nixio
 import numpy as np
 from dash import Dash, Input, Output, State
-from IPython import embed
 
 from thunderpulse.data_handling.data import load_data
 
@@ -21,8 +20,13 @@ def callbacks(app: Dash) -> None:
 
         d = load_data(**filepath)
 
-        save_path = list(Path(d.paths.save_path).glob("*pulses.*"))
-        save_file = [p for p in save_path if p.suffix in [".nix", ".h5"]][0]
+        save_path = list(Path(d.paths.save_path).rglob("*pulses.*"))
+        try:
+            save_file = [p for p in save_path if p.suffix in [".nix", ".h5"]][
+                0
+            ]
+        except IndexError:
+            return None
 
         if not save_file.exists:
             return None
