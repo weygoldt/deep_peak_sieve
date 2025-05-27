@@ -29,9 +29,11 @@ class Metadata:
 class Paths:
     """Wrapper for paths."""
 
-    data_path: str | Path
-    save_path: str | Path
-    layout_path: str | Path
+    data_path: str | Path = field(default_factory=lambda: Path(__name__))
+    save_path: str | Path = field(default_factory=lambda: Path(__name__))
+    sensorarray_path: str | Path = field(
+        default_factory=lambda: Path(__name__)
+    )
 
 
 @dataclass(slots=True)
@@ -95,16 +97,16 @@ class Data:
 
 
 def load_data(
-    data_path: Path | str, save_path: Path | str, probe_path: Path | str
+    data_path: Path | str, save_path: Path | str, sensorarray_path: Path | str
 ) -> Data:
     """Load a single OpenEphys or WAV data recording session from the specified path."""
     data_path = Path(data_path)
-    probe_path = Path(probe_path)
+    sensorarray_path = Path(sensorarray_path)
     wav_files = list(Path(data_path).rglob("*.wav"))
 
     if len(wav_files) > 0:
         log.debug("Data directory has wav files")
-        with Path.open(probe_path) as f:
+        with Path.open(sensorarray_path) as f:
             seonsory_array = json.load(f)
 
         file_list = wav_files
@@ -123,7 +125,7 @@ def load_data(
             Paths(
                 data_path,
                 save_path,
-                probe_path,
+                sensorarray_path,
             ),
             SensorArray(
                 ids,
@@ -139,7 +141,7 @@ def load_data(
         data = nix_file.blocks[0].data_arrays["data"]
         sample_rate = data.dimensions[0].sampling_interval
 
-        with Path.open(probe_path) as f:
+        with Path.open(sensorarray_path) as f:
             sensor_array = json.load(f)
         ids = np.array(sensor_array["probes"][0]["device_channel_indices"])
         coordinates = np.array(sensor_array["probes"][0]["contact_positions"])
@@ -156,7 +158,7 @@ def load_data(
                 data.shape[0] * sample_rate,
                 data.shape[0],
             ),
-            Paths(data_path, save_path, probe_path),
+            Paths(data_path, save_path, sensorarray_path),
             SensorArray(
                 ids, coordinates[:, 0], coordinates[:, 1], coordinates[:, 2]
             ),

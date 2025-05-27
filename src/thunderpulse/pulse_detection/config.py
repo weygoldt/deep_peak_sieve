@@ -12,7 +12,7 @@ import orjson
 from dacite import Config, from_dict
 from IPython import embed
 
-from thunderpulse.data_handling.data import SensorArray
+from thunderpulse.data_handling.data import Paths, SensorArray
 from thunderpulse.dsp.filters import (
     bandpass_filter,
     notch_filter,
@@ -220,7 +220,9 @@ class Params:
         default_factory=PostProcessingParameters
     )
     sensoryarray: SensorArray = field(default_factory=SensorArray)
+    paths: Paths = field(default_factory=Paths)
     buffersize_s: float = 60.0  # seconds
+    run_all_parent_dirs: bool = False
 
     # ── (de)serialisation     helpers ──────────────────────────────────────
     def to_dict(self) -> dict:

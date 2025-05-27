@@ -650,10 +650,9 @@ def process_dataset(
 
 @app.command()
 def main(
-    datapath: Annotated[Path, typer.Argument(help="Path to the dataset.")],
-    savepath: Annotated[
-        Path | None, typer.Argument(help="Path to save the dataset.")
-    ] = None,
+    configpath: Annotated[
+        Path, typer.Argument(help="Path to the config.json.")
+    ],
     overwrite: Annotated[
         bool,
         typer.Option("--overwrite", "-o", help="Overwrite existing files."),
@@ -669,61 +668,45 @@ def main(
     5) Waveform extraction
     6) Dataset saving
     """
-    # configure_logging(verbosity=verbose)
+    configure_logging(verbosity=verbose)
     log.info("Starting ThunderPulse Pulse Detection")
-
-    if savepath is None:
-        savepath = datapath.parent / f"{str(datapath.name)}_pulses"
-    savepath.mkdir(parents=True, exist_ok=True)
-
-    possible_sensor_layout_names = ["electrode_layout.json", "probe.prb"]
-    config_path = datapath.parent / "config.json"
-    # TODO: add probe path
-
-    if not config_path.exists():
-        msg = f"No config file found at {config_path}. Please provide a config file."
+    if not configpath.exists():
+        msg = f"No config file found at {configpath}. Please provide a config file."
         raise FileNotFoundError(msg)
 
-    sensor_layout_found = False
-    sensor_layout_path = None
-    log.info("Searching for sensor layout file")
-    for sensor_layout_name in possible_sensor_layout_names:
-        sensor_layout_path = datapath.parent / sensor_layout_name
-        if sensor_layout_path.exists():
-            sensor_layout_found = True
-            msg = f"Found sensor layout file: {sensor_layout_path}"
-            log.info(msg)
-            break
-    if not sensor_layout_found or sensor_layout_path is None:
-        msg = (
-            "No sensor layout file found. Please provide a sensor layout file "
-            "in the dataset directory."
-            f" Possible names: {possible_sensor_layout_names}"
-            f" Found: {sensor_layout_path}"
-        )
-        raise FileNotFoundError(msg)
-    log.info(f"Using sensor layout file: {sensor_layout_path}")
+    params = Params().from_json(str(configpath))
+    savepath = Path(params.paths.save_path)
+    datapath = Path(params.paths.data_path)
+    sensorypath = Path(params.paths.sensorarray_path)
 
-    params = Params().from_json(str(config_path))
-    subdirs = sorted(datapath.glob("*/"))
+    if not savepath.exists() or not savepath.is_dir():
+        log.error("Save path does not exits or is not a directory")
+        sys.exit(1)
 
-    if not subdirs:
-        log.debug(
-            "Did not found any subdirectories taking the datapath as directory"
-        )
+    if params.run_all_parent_dirs:
+        subdirs = sorted(datapath.parent.glob("*/"))
+        if not subdirs:
+            log.debug(
+                "Did not found any subdirectories taking the datapath as directory"
+            )
+            subdirs = [datapath]
+    else:
         subdirs = [datapath]
 
     for recording_path in subdirs:
-        outfile_dir = savepath / recording_path.name
-        outfile_dir.mkdir(parents=True, exist_ok=True)
-        outfile_path = outfile_dir / "pulses.nix"
-        if outfile_path.exists() and not overwrite:
-            log.info(f"File {outfile_path} already exists, skipping.")
-            continue
+        if len(subdirs) == 1:
+            outfile_path = savepath / "pulses.nix"
+        else:
+            outfile_dir = savepath / (recording_path.name + "_pulses")
+            outfile_dir.mkdir(parents=True, exist_ok=True)
+            outfile_path = outfile_dir / "pulses.nix"
+            if outfile_path.exists() and not overwrite:
+                log.info(f"File {outfile_path} already exists, skipping.")
+                continue
         try:
-            data = load_data(recording_path, savepath, sensor_layout_path)
+            data = load_data(recording_path, savepath, sensorypath)
         except Exception as e:
-            log.error(f"Failed to load {recording_path}: {e}")
+            log.exception(f"Failed to load {recording_path}: {e}")
             continue
 
         log.info(f"Processing file: {recording_path}")
