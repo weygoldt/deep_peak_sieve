@@ -169,7 +169,7 @@ def callbacks_traces(app):
                             marker_symbol="arrow",
                             marker_color=pulse_colors,
                             marker_size=10,
-                            name=f"Peaks {ch}",
+                            # name=f"Peaks {ch}",
                         ),
                         row=i,
                         col=[1] * channel_length,

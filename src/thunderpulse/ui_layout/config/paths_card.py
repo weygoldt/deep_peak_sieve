@@ -41,6 +41,20 @@ def create_paths_offcanvas() -> dbc.Card:
                     persistence_type="local",
                     className="card-text",
                 ),
+                html.Br(),
+                dbc.Checklist(
+                    options=[
+                        {
+                            "label": "Run for all parent directories",
+                            "value": 0,
+                        }
+                    ],
+                    id="sw_paths_run_all_parent_dirs",
+                    switch=True,
+                    persistence=True,
+                    persistence_type="local",
+                ),
+                html.Br(),
             ]
         )
     )

@@ -1,3 +1,5 @@
+from dataclasses import asdict
+
 import numpy as np
 import plotly.colors
 import plotly.express as px
@@ -7,7 +9,7 @@ from IPython import embed
 from IPython.core.interactiveshell import is_integer_string
 from plotly import subplots
 
-from thunderpulse.data_handling.data import load_data
+from thunderpulse.data_handling.data import Paths, load_data
 from thunderpulse.pulse_detection.config import (
     BandpassParameters,
     FiltersParameters,
@@ -60,7 +62,10 @@ def callbacks(app):
                 "quality_factor": Input("num_notchfilter_quality", "value"),
             },
             "general_pulse": {
-                "buffersize_s": Input("num_pulse_buffersize", "value")
+                "buffersize_s": Input("num_pulse_buffersize", "value"),
+                "run_all_parent_dirs": Input(
+                    "sw_paths_run_all_parent_dirs", "value"
+                ),
             },
             "pulse": {
                 "min_channels": Input("num_pulse_min_channels", "value"),
@@ -154,13 +159,18 @@ def callbacks(app):
         postprocessing["enable_normalization"] = bool(
             postprocessing["enable_normalization"]
         )
+        general_pulse["run_all_parent_dirs"] = bool(
+            general_pulse["run_all_parent_dirs"]
+        )
+        file_paths = Paths(**filepath)
         postpros = PostProcessingParameters(**postprocessing)
         params = Params(
-            prefilter,
-            filters,
-            peaks,
-            postpros,
+            preprocessing=prefilter,
+            filters=filters,
+            peaks=peaks,
+            postprocessing=postpros,
             sensoryarray=d.sensorarray,
+            paths=file_paths,
             **general_pulse,
         )
         return params.to_dict()

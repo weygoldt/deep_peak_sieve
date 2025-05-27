@@ -1,4 +1,4 @@
-import pathlib
+from pathlib import Path
 
 from dash import Dash, Input, Output, ctx
 
@@ -15,7 +15,7 @@ def callbacks(app: Dash) -> None:
     def io_handling(
         datapath: str | None,
         savepath: str | None,
-        probepath: str | None,
+        sensorarraypath: str | None,
         bt_load_data: int,
     ) -> dict | None:
         """Save the user input of the io card to a filepath storage.
@@ -26,7 +26,7 @@ def callbacks(app: Dash) -> None:
             Path to data
         savepath : str | None
             Path for saving output
-        probepath : str | None
+        sensorarray_path: str | None
             Path to Probelayout / Gridlayout
         bt_load_data : int
             Button load data is needed for ctx.triggered_id check
@@ -45,24 +45,24 @@ def callbacks(app: Dash) -> None:
         save_dict = {
             "data_path": "",
             "save_path": "",
-            "probe_path": "",
+            "sensorarray_path": "",
         }
-        if not datapath or not savepath or not probepath:
+        if not datapath or not savepath or not sensorarraypath:
             return save_dict
 
-        data_path = pathlib.Path(datapath)
-        save_path = pathlib.Path(savepath)
-        probe_path = pathlib.Path(probepath)
+        data_path = Path(datapath)
+        save_path = Path(savepath)
+        sensorarray_path = Path(sensorarraypath)
 
         if (
             not data_path.exists()
             or not save_path.exists()
-            or not probe_path.exists()
+            or not sensorarray_path.exists()
         ):
             return save_dict
 
         save_dict["save_path"] = str(save_path)
-        save_dict["probe_path"] = str(probe_path)
+        save_dict["sensorarray_path"] = str(sensorarray_path)
         save_dict["data_path"] = str(data_path)
 
         return save_dict

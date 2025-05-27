@@ -1,4 +1,3 @@
-import nixio
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
@@ -6,8 +5,17 @@ from dash import Input, Output
 from plotly import subplots
 from scipy.signal import welch
 
-from . import channel_selection as cs
-from . import data_selection as ds
+from thunderpulse.data_handling.data import load_data
+from thunderpulse.dsp.common_reference import common_median_reference
+from thunderpulse.pulse_detection.config import Params
+from thunderpulse.pulse_detection.detection import apply_filters
+from thunderpulse.ui_callbacks.graphs.channel_selection import select_channels
+from thunderpulse.ui_callbacks.graphs.data_selection import select_data
+from thunderpulse.utils.loggers import get_logger
+from thunderpulse.utils.logging_setup import setup_logging
+
+log = get_logger(__name__)
+setup_logging(log)
 
 
 def default_traces_figure():
@@ -29,97 +37,65 @@ def default_traces_figure():
 def callbacks_psd(app):
     @app.callback(
         Output("psd", "figure"),
-        Input("vis_tabs", "active_tab"),
-        Input("time_slider", "value"),
-        Input("channel_range_slider", "value"),
-        Input("sw_bandpass_filter", "value"),
-        Input("lowcutoff", "value"),
-        Input("highcutoff", "value"),
-        Input("sw_common_reference", "value"),
-        Input("filepath", "data"),
-        Input("probe", "selectedData"),
-        Input("sw_peaks_current_window", "value"),
-        Input("n_median", "value"),
-        Input("sw_processed", "value"),
-        Input("exclude_radius", "value"),
-        Input("sw_merged_peaks", "value"),
-        # Input("peak_storage", "data"),
-        Input("sw_notch_filter", "value"),
-        Input("notch", "value"),
+        inputs={
+            "general": {
+                "filepath": Input("filepath", "data"),
+                "vis_tabs": Input("vis_tabs", "active_tab"),
+                "time_slider": Input("time_slider", "value"),
+                "channels": Input("channel_range_slider", "value"),
+                "probe_selected_channels": Input("probe", "selectedData"),
+                "detect_pulses": Input("sw_detect_pulses", "value"),
+            },
+            "pulse_detection_config": Input("pulse_detection_config", "data"),
+            "pulse_storage": Input("peak_storage", "data"),
+        },
     )
-    def update_graph_psd(
-        tabs,
-        time_index: int,
-        channels,
-        switch_bandpass,
-        low,
-        high,
-        switch_common_reference,
-        filepath,
-        probe_selected_channels,
-        sw_peak_detection,
-        n_median,
-        sw_processed,
-        exclude_radius,
-        sw_merged_peaks,
-        # peaks
-        sw_notch_filter,
-        notch,
-    ):
-        if tabs:
-            if not tabs == "tab_psd":
-                fig = default_traces_figure()
-                return fig
-        if not filepath:
-            fig = default_traces_figure()
-            return fig
-
-        DATA_PATH = filepath["data_path"]
-        if not DATA_PATH:
-            fig = default_traces_figure()
-            return fig
-
-        nix_file = nixio.File(filepath["data_path"], nixio.FileMode.ReadOnly)
-        recording = nix_file.blocks[0].data_arrays["data"]
-        section = nix_file.sections["recording"]
-        sample_rate = float(section["samplerate"][0])
-        time_display = 1
-
-        if isinstance(channels, list):
-            channels = np.array(channels)
-
-        probe_frame = nix_file.blocks[0].data_frames["probe_frame"]
-        channels, channel_length = cs.select_channels(
+    def update_graph_psd(general, pulse_detection_config, pulse_storage):
+        (
+            filepath,
+            tabs,
+            time_index,
             channels,
             probe_selected_channels,
-            probe_frame,
+            detect_pulses,
+        ) = general.values()
+
+        if tabs and tabs != "tab_psd":
+            return default_traces_figure()
+        if not filepath:
+            return default_traces_figure()
+        if not filepath["data_path"]:
+            return default_traces_figure()
+
+        d = load_data(**filepath)
+
+        params = Params.from_dict(pulse_detection_config)
+
+        channels = np.array(channels)
+
+        log.info(f"Loading data into dashboard: {filepath}")
+
+        time_display = 1
+        channels, channel_length = select_channels(
+            channels,
+            probe_selected_channels,
+            d.sensorarray,
         )
 
-        sliced_data, time_slice = ds.select_data(
-            recording, time_index, time_display, sample_rate
+        sliced_data, time_slice = select_data(
+            d.data, time_index, time_display, d.metadata.samplerate
         )
-        index_time_start = int(time_slice[0] * sample_rate)
+        index_time_start = int(time_slice[0] * d.metadata.samplerate)
 
-        if sw_processed:
-            recording = nix_file.blocks[0].data_arrays["processed_data"]
-            sliced_data, time_slice = ds.select_data(
-                recording, time_index, time_display, sample_rate
-            )
-        else:
-            sliced_data = processing.preprocessing.preprocessing_current_slice(
-                sliced_data,
-                sample_rate,
-                switch_bandpass,
-                low,
-                high,
-                switch_common_reference,
-                sw_notch_filter,
-                notch,
-            )
+        # PreFilter operations
+        if getattr(params.preprocessing, "common_median_reference", False):
+            log.debug("Take the common median average")
+            sliced_data = common_median_reference(sliced_data)
+        sliced_data = apply_filters(sliced_data, d.metadata.samplerate, params)
 
         f, cx = welch(
             sliced_data,
-            sample_rate,
+            d.metadata.samplerate,
             nperseg=2**10,
             axis=0,
         )
@@ -158,6 +134,5 @@ def callbacks_psd(app):
         fig.update_yaxes(
             type="log",
         )
-        nix_file.close()
 
         return fig
