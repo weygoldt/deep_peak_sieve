@@ -187,6 +187,130 @@ def detect_peaks(
 
 
 @njit(cache=True)
+def find(parents, i):
+    """
+    Find the root of the set containing element i with path compression.
+
+    Parameters
+    ----------
+    parents : np.ndarray of shape (n_elements,)
+        Array where parents[i] is the parent of element i in the union-find structure.
+    i : int
+        Index of the element to find the root for.
+
+    Returns
+    -------
+    root : int
+        The root index of the set containing element i.
+    """
+    root = i
+    while parents[root] != root:
+        root = parents[root]
+    while parents[i] != i:
+        j = parents[i]
+        parents[i] = root
+        i = j
+    return root
+
+
+@njit(cache=True)
+def union(parents, i, j):
+    """
+    Merge the sets containing elements i and j.
+
+    Parameters
+    ----------
+    parents : np.ndarray of shape (n_elements,)
+        Array where parents[i] is the parent of element i in the union-find structure.
+    i : int
+        Index of the first element.
+    j : int
+        Index of the second element.
+
+    Returns
+    -------
+    None
+    """
+    ri = find(parents, i)
+    rj = find(parents, j)
+    if ri != rj:
+        parents[rj] = ri
+
+
+@njit(cache=True)
+def group_pulses_union_find(
+    pulses: np.ndarray,
+    channels: np.ndarray,
+    sensoryarray: np.ndarray,
+    min_peak_distance_index: int,
+    distance_channels: float,
+) -> np.ndarray:
+    """
+    Group pulses in space and time using a union-find structure for monotonic clustering.
+
+    Parameters
+    ----------
+    pulses : np.ndarray of shape (n_pulses,)
+        1D array of detected pulse times (e.g., sample indices).
+    channels : np.ndarray of shape (n_pulses,)
+        1D array of channel indices corresponding to each pulse.
+    sensoryarray : np.ndarray of shape (n_channels, 3)
+        Array of channel positions in 3D space. Each row should be [x, y, z] for a channel.
+    min_peak_distance_index : int
+        Maximum allowed time difference (in index units) to group pulses together.
+        Pulses further apart in time will not be grouped.
+    distance_channels : float
+        Maximum allowed spatial distance (in the same units as sensoryarray) to group pulses.
+        Pulses on channels further apart than this will not be grouped.
+
+    Returns
+    -------
+    labels : np.ndarray of shape (n_pulses,)
+        Array of group labels for each pulse, in the original order.
+        Pulses assigned the same label belong to the same group.
+
+    Notes
+    -----
+    - Pulses are grouped if they are within both the specified time and spatial distance.
+    - Grouping is performed using a union-find (disjoint set) structure, ensuring monotonic
+      merging of groups as the distance threshold increases.
+    - The function assumes `pulses` is sorted by time.
+    """
+    n_peaks = pulses.shape[0]
+    parents = np.arange(n_peaks, dtype=np.int64)
+
+    for i in range(n_peaks):
+        t1 = pulses[i]
+        ch1 = channels[i]
+        pos1 = sensoryarray[ch1]
+        for j in range(i + 1, n_peaks):
+            t2 = pulses[j]
+            if t2 - t1 > min_peak_distance_index:
+                break
+            ch2 = channels[j]
+            pos2 = sensoryarray[ch2]
+            dist = np.sqrt(
+                (pos1[0] - pos2[0]) ** 2
+                + (pos1[1] - pos2[1]) ** 2
+                + (pos1[2] - pos2[2]) ** 2
+            )
+            if dist <= distance_channels:
+                union(parents, i, j)
+
+    # Assign labels based on root parent
+    label_map = {}
+    labels = np.empty(n_peaks, dtype=np.int64)
+    current_label = 0
+    for i in range(n_peaks):
+        root = find(parents, i)
+        if root not in label_map:
+            label_map[root] = current_label
+            current_label += 1
+        labels[i] = label_map[root]
+    return labels
+
+
+@njit(cache=True)
 def group_pulses(
     pulses: np.ndarray,
     channels: np.ndarray,
@@ -245,9 +369,9 @@ def group_pulses(
             pos2 = sensoryarray[ch2]
             # Euclidean distance in 3D
             dist = np.sqrt(
-                (pos1[0] - pos2[0]) ** 2
-                + (pos1[1] - pos2[1]) ** 2
-                + (pos1[2] - pos2[2]) ** 2
+                np.abs(pos1[0] - pos2[0]) ** 2
+                + np.abs(pos1[1] - pos2[1]) ** 2
+                + np.abs(pos1[2] - pos2[2]) ** 2
             )
             if dist <= distance_channels:
                 labels[j] = current_label
@@ -433,7 +557,7 @@ def detect_peaks_on_block(
     )
 
     log.debug("Grouping pulses in space and time")
-    labels = group_pulses(
+    labels = group_pulses_union_find(
         pulse_list,
         channels_list,
         sensoryarray,
