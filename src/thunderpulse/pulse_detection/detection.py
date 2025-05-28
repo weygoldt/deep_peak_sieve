@@ -455,7 +455,7 @@ def main(
     sensor_layout_path = None
     log.info("Searching for sensor layout file")
     for sensor_layout_name in possible_sensor_layout_names:
-        sensor_layout_path = datapath / sensor_layout_name
+        sensor_layout_path = datapath.parent / sensor_layout_name
         if sensor_layout_path.exists():
             sensor_layout_found = True
             msg = f"Found sensor layout file: {sensor_layout_path}"
