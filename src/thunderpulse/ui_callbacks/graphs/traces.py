@@ -149,8 +149,8 @@ def callbacks_traces(app):
             )
 
             if output:
-                unique_groups = sorted(set(output["group"]))
                 color_set = plotly.colors.qualitative.Dark24
+                unique_groups = np.unique(output["group"])
                 n_colors = len(color_set)
                 group_to_color = {
                     group: color_set[i % n_colors]
@@ -168,7 +168,7 @@ def callbacks_traces(app):
                             mode="markers",
                             marker_symbol="arrow",
                             marker_color=pulse_colors,
-                            marker_size=10,
+                            marker_size=9,
                             # name=f"Peaks {ch}",
                         ),
                         row=i,
